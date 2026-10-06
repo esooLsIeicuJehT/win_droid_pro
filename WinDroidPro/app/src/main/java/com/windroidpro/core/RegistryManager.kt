@@ -5,75 +5,49 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class RegistryManager @Inject constructor() {
+class RegistryManager @Inject constructor(
+    private val commandExecutor: CommandExecutor
+) {
+    companion object {
+        private const val MAX_PATCH_BYTES = 4L * 1024L * 1024L
+    }
 
     suspend fun applyRegistryPatch(container: Container, patchFile: File) = withContext(Dispatchers.IO) {
+        require(patchFile.isFile) { "Registry patch does not exist: $patchFile" }
+        require(patchFile.length() in 1L..MAX_PATCH_BYTES) {
+            "Registry patch must be between 1 byte and $MAX_PATCH_BYTES bytes"
+        }
+
         Timber.d("Applying registry patch ${patchFile.name} to container ${container.name}")
-        // Ideally we would invoke regedit here, but we can't from here.
-        // Instead we place it in a location where a startup script might pick it up.
-        // Using standard Windows path case, though filesystem might be case-insensitive or not.
-        val startupDir = File(container.prefixPath, "drive_c/windows/Start Menu/Programs/Startup")
-        // Try creating if not exists, to be safe
-        if (!startupDir.exists()) startupDir.mkdirs()
-
-        if (startupDir.exists()) {
-            patchFile.copyTo(File(startupDir, "patch_${System.currentTimeMillis()}.reg"), overwrite = true)
-        }
+        importRegistryContent(container, patchFile.readText())
     }
 
-    /**
-     * Generates the content of a .reg file.
-     * Visible for testing.
-     */
-    private fun generateRegFragment(keyPath: String, valueName: String, value: String): String {
-        val finalValueName = if (valueName.isEmpty() || valueName == "@") "@" else "\"$valueName\""
-
-        // Determine if value needs quotes
-        // dword: and hex: values are not quoted
-        val finalValue = if (value.startsWith("dword:") || value.startsWith("hex:")) {
-            value
-        } else {
-            // Escape quotes and backslashes for string values
-            val escapedValue = value.replace("\\", "\\\\").replace("\"", "\\\"")
-            "\"$escapedValue\""
-        }
-
-        return "\n[$keyPath]\n$finalValueName=$finalValue\n"
-    }
-
-    /**
-     * Generates the content of a .reg file.
-     * Visible for testing.
-     */
     internal fun generateRegContent(keyPath: String, valueName: String, value: String): String {
-        return "Windows Registry Editor Version 5.00\n" + generateRegFragment(keyPath, valueName, value)
+        require(keyPath.isNotBlank()) { "Registry key path must not be blank" }
+        return ("Windows Registry Editor Version 5.00\n" +
+            generateRegFragment(keyPath, valueName, value)).trimEnd()
     }
 
-    suspend fun setRegistryValue(container: Container, keyPath: String, valueName: String, value: String) = withContext(Dispatchers.IO) {
-        Timber.d("Setting registry value $keyPath\\$valueName = $value for container ${container.name}")
-        try {
-            val startupDir = File(container.prefixPath, "drive_c/windows/Start Menu/Programs/Startup")
-            if (!startupDir.exists()) startupDir.mkdirs()
-
-            val updateFile = File(startupDir, "user_updates.reg")
-
-            synchronized(this@RegistryManager) {
-                if (!updateFile.exists()) {
-                    updateFile.writeText("Windows Registry Editor Version 5.00\n")
-                }
-                updateFile.appendText(generateRegFragment(keyPath, valueName, value))
-            }
-            Timber.d("Appended registry value to ${updateFile.name}")
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to set registry value")
-        }
+    suspend fun setRegistryValue(
+        container: Container,
+        keyPath: String,
+        valueName: String,
+        value: String
+    ) = withContext(Dispatchers.IO) {
+        Timber.d("Setting registry value $keyPath\\$valueName for container ${container.name}")
+        importRegistryContent(container, generateRegContent(keyPath, valueName, value))
     }
 
-    suspend fun getRegistryValue(container: Container, keyPath: String, valueName: String): String? = withContext(Dispatchers.IO) {
+    suspend fun getRegistryValue(
+        container: Container,
+        keyPath: String,
+        valueName: String
+    ): String? = withContext(Dispatchers.IO) {
         val (hive, subKey) = splitHiveAndSubKey(keyPath) ?: return@withContext null
         val regFileName = when (hive.uppercase()) {
             "HKEY_LOCAL_MACHINE", "HKLM" -> "system.reg"
@@ -82,55 +56,88 @@ class RegistryManager @Inject constructor() {
         }
 
         val regFile = File(container.prefixPath, regFileName)
-        if (!regFile.exists()) {
+        if (!regFile.isFile) {
             Timber.d("Registry file not found: ${regFile.absolutePath}")
             return@withContext null
         }
 
-        // Clean subKey (remove trailing slashes) and convert to Wine format
         val cleanSubKey = subKey.trimEnd('\\')
         val wineSubKey = cleanSubKey.replace("\\", "\\\\")
         val sectionHeaderStart = "[$wineSubKey]"
-
         val targetPrefix = if (valueName.isEmpty() || valueName == "@") "@=" else "\"$valueName\"="
 
-        try {
-            regFile.useLines { lines ->
-                var insideTargetSection = false
-                for (line in lines) {
-                    val trimmed = line.trim()
-                    if (trimmed.startsWith("[")) {
-                        // Check if we are entering the target section
-                        // Wine sections often have timestamp at the end: [Software\\Test] 123123
-                        // We check if it starts with [Software\\Test]
-                        if (trimmed.startsWith(sectionHeaderStart, ignoreCase = true)) {
-                            insideTargetSection = true
-                        } else {
-                            if (insideTargetSection) return@useLines null // Left the section
-                            insideTargetSection = false
-                        }
-                    } else if (insideTargetSection) {
-                        if (trimmed.startsWith(targetPrefix, ignoreCase = true)) {
-                            val rawValue = trimmed.substring(targetPrefix.length)
-
-                            // Parse value
-                            if (rawValue.startsWith("\"") && rawValue.endsWith("\"")) {
-                                // String value: Unescape
-                                val content = rawValue.substring(1, rawValue.length - 1)
-                                return@useLines unescapeRegistryString(content)
-                            } else {
-                                // dword, hex, or other
-                                return@useLines rawValue
-                            }
-                        }
+        regFile.useLines { lines ->
+            var insideTargetSection = false
+            for (line in lines) {
+                val trimmed = line.trim()
+                if (trimmed.startsWith("[")) {
+                    if (trimmed.startsWith(sectionHeaderStart, ignoreCase = true)) {
+                        insideTargetSection = true
+                    } else {
+                        if (insideTargetSection) return@useLines null
+                        insideTargetSection = false
+                    }
+                } else if (insideTargetSection && trimmed.startsWith(targetPrefix, ignoreCase = true)) {
+                    val rawValue = trimmed.substring(targetPrefix.length)
+                    return@useLines if (rawValue.startsWith("\"") && rawValue.endsWith("\"") && rawValue.length >= 2) {
+                        unescapeRegistryString(rawValue.substring(1, rawValue.length - 1))
+                    } else {
+                        rawValue
                     }
                 }
-                null
             }
-        } catch (e: Exception) {
-            Timber.e(e, "Error reading registry file")
             null
         }
+    }
+
+    private fun importRegistryContent(container: Container, content: String) {
+        require(content.isNotBlank()) { "Registry patch content must not be blank" }
+        require(content.toByteArray(Charsets.UTF_8).size.toLong() <= MAX_PATCH_BYTES) {
+            "Registry patch exceeds $MAX_PATCH_BYTES bytes"
+        }
+
+        val importDir = File(container.prefixPath, "drive_c/windroid/imports")
+        if (!importDir.exists() && !importDir.mkdirs()) {
+            throw IllegalStateException("Unable to create registry import directory: $importDir")
+        }
+
+        val patchFile = File(importDir, "registry_${UUID.randomUUID()}.reg")
+        patchFile.writeText(content)
+
+        val windowsPatchPath = "C:\\windroid\\imports\\${patchFile.name}"
+        val workingDir = File(container.prefixPath, "drive_c/windows/system32").absolutePath
+
+        try {
+            val result = commandExecutor.execute(
+                exe = "regedit",
+                args = "/S \"$windowsPatchPath\"",
+                workingDir = workingDir
+            )
+            if (result != 0) {
+                throw IllegalStateException(
+                    "Registry import failed for ${container.name}; regedit exit code $result"
+                )
+            }
+            Timber.i("Registry patch applied successfully to ${container.name}")
+        } finally {
+            if (patchFile.exists() && !patchFile.delete()) {
+                Timber.w("Unable to delete temporary registry patch: ${patchFile.absolutePath}")
+            }
+        }
+    }
+
+    private fun generateRegFragment(keyPath: String, valueName: String, value: String): String {
+        val escapedValueName = valueName.replace("\\", "\\\\").replace("\"", "\\\"")
+        val finalValueName = if (valueName.isEmpty() || valueName == "@") "@" else "\"$escapedValueName\""
+
+        val finalValue = if (value.startsWith("dword:") || value.startsWith("hex:")) {
+            value
+        } else {
+            val escapedValue = value.replace("\\", "\\\\").replace("\"", "\\\"")
+            "\"$escapedValue\""
+        }
+
+        return "\n[$keyPath]\n$finalValueName=$finalValue\n"
     }
 
     private fun splitHiveAndSubKey(keyPath: String): Pair<String, String>? {
@@ -140,27 +147,31 @@ class RegistryManager @Inject constructor() {
     }
 
     private fun unescapeRegistryString(value: String): String {
-        val sb = StringBuilder()
-        var i = 0
-        while (i < value.length) {
-            val c = value[i]
-            if (c == '\\' && i + 1 < value.length) {
-                val next = value[i + 1]
-                if (next == '\\') {
-                    sb.append('\\')
-                    i += 2
-                } else if (next == '"') {
-                    sb.append('"')
-                    i += 2
-                } else {
-                    sb.append(c)
-                    i++
+        val result = StringBuilder()
+        var index = 0
+        while (index < value.length) {
+            val current = value[index]
+            if (current == '\\' && index + 1 < value.length) {
+                when (val next = value[index + 1]) {
+                    '\\' -> {
+                        result.append('\\')
+                        index += 2
+                    }
+                    '"' -> {
+                        result.append('"')
+                        index += 2
+                    }
+                    else -> {
+                        result.append(current)
+                        result.append(next)
+                        index += 2
+                    }
                 }
             } else {
-                sb.append(c)
-                i++
+                result.append(current)
+                index++
             }
         }
-        return sb.toString()
+        return result.toString()
     }
 }

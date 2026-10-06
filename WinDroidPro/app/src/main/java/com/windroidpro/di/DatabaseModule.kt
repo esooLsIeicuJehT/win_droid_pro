@@ -24,9 +24,7 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "windroid_pro.db"
-        )
-        .fallbackToDestructiveMigration()
-        .build()
+        ).build()
     }
 
     @Provides

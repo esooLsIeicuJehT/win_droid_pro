@@ -5,9 +5,36 @@ plugins {
     id 'dagger.hilt.android.plugin'
 }
 
+def secretValue = { String propertyName, String environmentName ->
+    providers.gradleProperty(propertyName)
+        .orElse(providers.environmentVariable(environmentName))
+        .getOrNull()
+}
+
+def releaseStoreFilePath = secretValue('windroid.release.storeFile', 'WINDROID_RELEASE_STORE_FILE')
+def releaseStorePassword = secretValue('windroid.release.storePassword', 'WINDROID_RELEASE_STORE_PASSWORD')
+def releaseKeyAlias = secretValue('windroid.release.keyAlias', 'WINDROID_RELEASE_KEY_ALIAS')
+def releaseKeyPassword = secretValue('windroid.release.keyPassword', 'WINDROID_RELEASE_KEY_PASSWORD')
+def releaseSigningConfigured = [
+    releaseStoreFilePath,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword
+].every { value -> value != null && !value.trim().isEmpty() }
+
+def requiredRuntimeAssets = [
+    'wine-9.0-x86.tar.xz',
+    'wine-9.0-x86_64.tar.xz',
+    'box64.tar.xz',
+    'mesa.tar.xz',
+    'dxvk.tar.xz',
+    'vkd3d.tar.xz'
+]
+
 android {
     namespace 'com.windroidpro'
     compileSdk 34
+    ndkVersion '26.1.10909125'
 
     defaultConfig {
         applicationId "com.windroidpro"
@@ -15,13 +42,13 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0.0"
-        
+
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        
+
         ndk {
             abiFilters 'arm64-v8a', 'armeabi-v7a'
         }
-        
+
         externalNativeBuild {
             cmake {
                 cppFlags "-std=c++17 -frtti -fexceptions"
@@ -32,11 +59,13 @@ android {
     }
 
     signingConfigs {
-        release {
-            storeFile file("../keystore/release.jks")
-            storePassword "android"
-            keyAlias "windroidpro"
-            keyPassword "android"
+        if (releaseSigningConfigured) {
+            release {
+                storeFile file(releaseStoreFilePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
         }
     }
 
@@ -44,9 +73,11 @@ android {
         release {
             minifyEnabled true
             shrinkResources true
-            signingConfig signingConfigs.release
+            if (releaseSigningConfigured) {
+                signingConfig signingConfigs.release
+            }
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            
+
             ndk {
                 debugSymbolLevel 'FULL'
             }
@@ -56,7 +87,7 @@ android {
             debuggable true
         }
     }
-    
+
     externalNativeBuild {
         cmake {
             path file('src/main/cpp/CMakeLists.txt')
@@ -68,21 +99,21 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-    
+
     kotlinOptions {
         jvmTarget = '17'
     }
-    
+
     buildFeatures {
         compose true
         viewBinding true
         buildConfig true
     }
-    
+
     composeOptions {
         kotlinCompilerExtensionVersion = '1.5.8'
     }
-    
+
     packagingOptions {
         resources {
             excludes += ['/META-INF/{AL2.0,LGPL2.1}']
@@ -93,13 +124,83 @@ android {
     }
 }
 
+tasks.register('verifyRuntimeAssets') {
+    group = 'verification'
+    description = 'Fails release builds when required emulator runtime archives are missing or placeholders.'
+
+    doLast {
+        def failures = []
+        requiredRuntimeAssets.each { assetName ->
+            def assetFile = file("src/main/assets/${assetName}")
+            if (!assetFile.isFile()) {
+                failures << "${assetName}: missing"
+                return
+            }
+
+            if (assetFile.length() < 1024L) {
+                failures << "${assetName}: ${assetFile.length()} bytes (placeholder or corrupt)"
+                return
+            }
+
+            byte[] header = new byte[6]
+            int bytesRead = assetFile.withInputStream { input -> input.read(header) }
+            boolean isXz = bytesRead == 6 &&
+                (header[0] & 0xff) == 0xfd &&
+                (header[1] & 0xff) == 0x37 &&
+                (header[2] & 0xff) == 0x7a &&
+                (header[3] & 0xff) == 0x58 &&
+                (header[4] & 0xff) == 0x5a &&
+                (header[5] & 0xff) == 0x00
+
+            if (!isXz) {
+                failures << "${assetName}: invalid XZ header"
+            }
+        }
+
+        if (!failures.isEmpty()) {
+            throw new GradleException(
+                "WinDroid Pro runtime assets are not release-ready:\n - " +
+                    failures.join('\n - ') +
+                    "\nReplace every placeholder with the audited runtime payload before assembling a release."
+            )
+        }
+    }
+}
+
+tasks.register('verifyReleaseSigning') {
+    group = 'verification'
+    description = 'Requires release signing material to be supplied outside source control.'
+
+    doLast {
+        if (!releaseSigningConfigured) {
+            throw new GradleException(
+                'Release signing is not configured. Set WINDROID_RELEASE_STORE_FILE, ' +
+                    'WINDROID_RELEASE_STORE_PASSWORD, WINDROID_RELEASE_KEY_ALIAS, and ' +
+                    'WINDROID_RELEASE_KEY_PASSWORD (or matching windroid.release.* Gradle properties).'
+            )
+        }
+
+        def signingFile = file(releaseStoreFilePath)
+        if (!signingFile.isFile()) {
+            throw new GradleException("Release keystore does not exist: ${signingFile}")
+        }
+    }
+}
+
+afterEvaluate {
+    tasks.matching { task -> task.name == 'preReleaseBuild' }.configureEach {
+        dependsOn tasks.named('verifyRuntimeAssets')
+        dependsOn tasks.named('verifyReleaseSigning')
+    }
+}
+
 dependencies {
     // Core Android
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    
+
     // Jetpack Compose
     implementation platform('androidx.compose:compose-bom:2024.01.00')
     implementation 'androidx.compose.ui:ui'
@@ -110,59 +211,52 @@ dependencies {
     implementation 'androidx.activity:activity-compose:1.8.2'
     implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0'
     implementation 'androidx.navigation:navigation-compose:2.7.6'
-    
+
     // Lifecycle
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
     implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0'
     implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.7.0'
-    
+
     // Coroutines
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3'
-    
+
     // Hilt Dependency Injection
     implementation "com.google.dagger:hilt-android:$hilt_version"
     kapt "com.google.dagger:hilt-android-compiler:$hilt_version"
     implementation 'androidx.hilt:hilt-navigation-compose:1.1.0'
-    
+
     // Room Database
     implementation 'androidx.room:room-runtime:2.6.1'
     implementation 'androidx.room:room-ktx:2.6.1'
     kapt 'androidx.room:room-compiler:2.6.1'
-    
+
     // DataStore
     implementation 'androidx.datastore:datastore-preferences:1.0.0'
-    
+
     // Work Manager
     implementation 'androidx.work:work-runtime-ktx:2.9.0'
-    
+
     // Gson for JSON
     implementation 'com.google.code.gson:gson:2.10.1'
-    
+
     // Coil for image loading
     implementation 'io.coil-kt:coil-compose:2.5.0'
-    
+
     // Accompanist (Compose utilities)
     implementation 'com.google.accompanist:accompanist-permissions:0.34.0'
     implementation 'com.google.accompanist:accompanist-systemuicontroller:0.34.0'
-    
-    // File picker
+
+    // Scoped file access
     implementation 'androidx.documentfile:documentfile:1.0.1'
-    
-    // USB support
-    implementation 'com.github.mik3y:usb-serial-for-android:3.7.3'
-    
-    // Terminal emulator
-    implementation 'com.termux:terminal-emulator:0.118.0'
-    implementation 'com.termux:terminal-view:0.118.0'
-    
+
     // Compression
     implementation 'org.apache.commons:commons-compress:1.25.0'
     implementation 'org.tukaani:xz:1.9'
-    
+
     // Logging
     implementation 'com.jakewharton.timber:timber:5.0.1'
-    
+
     // Testing
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3'

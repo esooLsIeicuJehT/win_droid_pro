@@ -1,130 +1,92 @@
-🎉 WinDroid Pro
+# WinDroid Pro
 
-Welcome!
+WinDroid Pro is an Android project for running Windows applications through a Wine + ARM translation runtime, with container management, graphics translation, and USB host integration as the target architecture.
 
-A comprehensive and advanced Windows emulator for Android that significantly surpasses Winlator and all existing solutions.
+> **Status: pre-production.** The Android/native foundation builds toward that goal, but the repository does not yet contain a complete Windows runtime. Release builds are intentionally blocked while the required runtime assets are placeholders and until the real provisioning/launch path is implemented. See [`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md).
 
-🚀 Quick Start 
+## What is implemented
 
-Step 1: Extract the ZIP
-```bash
-unzip WinDroidPro-Complete.zip
-cd WinDroidPro
-```
+- Android application shell using Kotlin, Compose, Hilt, Room, and JNI/C++.
+- Container records and app-private prefix directories.
+- USB host UI/native I/O foundation with JNI transfer validation.
+- Runtime configuration helpers for registry, networking, services, DXVK/VKD3D setup, and clipboard integration.
+- Hardened tar.xz extraction for future runtime payload installation.
+- CI gates for unit tests, Android lint, native compilation, and debug APK assembly.
+- Release signing configuration sourced outside the repository.
+- Release-time integrity gates that reject missing/placeholder runtime archives.
 
-Step 2: Open in Android Studio
-1. Launch Android Studio
-2. Click "Open"
-3. Select the `WinDroidPro` folder
-4. Wait for Gradle sync
+## What is not release-ready yet
 
-Step 3: Build the APK
-- **Easy Way**: Click Build → Build APK(s)
-- **Script Way**: Run `./build.sh` (Linux/Mac) or `build.bat` (Windows)
-- **Command Way**: Run `./gradlew assembleDebug`
+The following six files are currently development placeholders and must be replaced by audited, compatible runtime artifacts before release:
 
-Your APK will be in `app/build/outputs/apk/`
+- `wine-9.0-x86.tar.xz`
+- `wine-9.0-x86_64.tar.xz`
+- `box64.tar.xz`
+- `mesa.tar.xz`
+- `dxvk.tar.xz`
+- `vkd3d.tar.xz`
 
-📖 Where to Start
+The end-to-end runtime installer, Wine prefix provisioning, Box64/Wine launch chain, graphics backend qualification, application picker/launcher, and physical-device compatibility pass also remain release blockers. WinDroid Pro should not be distributed as a finished emulator until those gates are complete.
 
- For Quick Building:
-👉 **Read QUICK_START.md** - Get building in 5 minutes
+## Requirements
 
-For Detailed Instructions:
-👉 **Read BUILD_INSTRUCTIONS.md** - Complete build guide with troubleshooting
+### Build
 
-For Understanding the Project:
-👉 **Read TECHNICAL_SPECIFICATION.md** - Architecture and design details
-
-For Deployment:
-👉 **Read DEPLOYMENT_GUIDE.md** - How to release and distribute
-
-For Users:
-👉 **Read README.md** - User documentation and features
-
-🎯 What Makes This Special
-
-1. Superior USB OTG Support ⭐
-- **First-class USB device passthrough**
-- Native control and bulk transfers
-- Driver emulation layer
-- Support for storage, serial, HID, audio devices
-
-2. Better Than Winlator ⭐
-- Modern Material Design 3 UI
-- Professional MVVM architecture
-- Comprehensive documentation
-- Production-ready code quality
-
-3. Complete Package ⭐
-- Full source code
-- Build scripts included
-- 10,000+ words of documentation
-- Ready to build and deploy
-
-4. Target Applications ⭐
-- FRP bypass tools (Samsung, LG, Huawei)
-- iOS bypass tools (iCloud, backup extractors)
-- General Windows applications
-
-🔧 System Requirements
-
-To Build:
-- Android Studio Hedgehog (2023.1.1+)
+- JDK 17
 - Android SDK 34
-- Android NDK r26+
-- CMake 3.22+
-- 8GB RAM minimum
+- Android Build Tools 34.0.0
+- Android NDK `26.1.10909125`
+- CMake 3.22.1
+- Gradle 8.2.1 when a Gradle wrapper is not present
 
- To Run:
-- Android 8.0+ (API 26+)
-- ARM64 processor
-- 4GB RAM minimum
-- 2GB storage
-- USB OTG support (optional)
+### Target device
 
-📱 Build Methods
+The current Android configuration targets API 26+ and builds ARM ABIs. Actual runtime/device support will be documented only after the real runtime stack has been qualified on physical hardware.
 
-ethod 1: Android Studio (Recommended)
-1. Open project in Android Studio
-2. Wait for Gradle sync
-3. Click Build → Build APK(s)
-4. Done!
+## Build a debug APK
 
-Method 2: Build Scripts
 ```bash
-# Linux/macOS
+cd WinDroidPro
 ./build.sh
-
-# Windows
-build.bat
 ```
 
-Method 3: Command Line
+Or, with Gradle 8.2.1 installed:
+
 ```bash
-# Debug build
-./gradlew assembleDebug
-
-# Release build
-./gradlew assembleRelease
+cd WinDroidPro
+gradle --no-daemon testDebugUnitTest lintDebug assembleDebug
 ```
 
+The APK is produced under:
 
-Short-term (1-2 days):
-1. 🔧 Test the APK on your device
-2. 🔧 Customize branding and colors
-3. 🔧 Add app icons
-4. 🔧 Complete UI screens
+```text
+WinDroidPro/app/build/outputs/apk/debug/
+```
 
-To Make Fully Functional (3-5 days):
-1. 🔧 Add Wine 9.x binaries
-2. 🔧 Add Box64 binaries
-3. 🔧 Add graphics libraries (Mesa, DXVK, VKD3D)
-4. 🔧 Package assets
-5. 🔧 Test with target applications
+## Release builds
 
-Build Logs:
-Check `app/build/outputs/logs/` for detailed error messages
+Release builds deliberately fail unless both conditions are true:
 
-**License**: MIT
-**Created**: 2025
+1. Every required runtime archive exists, is non-placeholder content, and has a valid XZ header.
+2. A new release signing key is provided outside source control.
+
+Expected signing environment variables:
+
+```text
+WINDROID_RELEASE_STORE_FILE
+WINDROID_RELEASE_STORE_PASSWORD
+WINDROID_RELEASE_KEY_ALIAS
+WINDROID_RELEASE_KEY_PASSWORD
+```
+
+The historical repository keystore must **not** be reused. It was committed to Git history and therefore must be treated as compromised.
+
+## Security and release policy
+
+A successful debug build is not considered proof of emulator functionality. User-visible capabilities must work end-to-end on real hardware before being advertised as supported. Placeholder assets, simulated subsystems, hardcoded release credentials, and fake-success launch paths are release blockers.
+
+See [`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md) for the full definition of done.
+
+## License
+
+Project source is declared MIT in the existing project metadata. Before distributing bundled Wine, Box64, Mesa, DXVK, VKD3D, or other third-party runtime components, add their exact licenses, source/provenance information, and any required notices to the release package.
