@@ -2,6 +2,7 @@ package com.windroidpro.utils
 
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream
+import org.apache.commons.compress.archivers.tar.TarConstants
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
@@ -49,9 +50,9 @@ class ArchiveUtilsTest {
         val bytes = ByteArrayOutputStream().use { output ->
             XZOutputStream(output, LZMA2Options()).use { xzOutput ->
                 TarArchiveOutputStream(xzOutput).use { tarOutput ->
-                    val entry = TarArchiveEntry("link")
-                    entry.linkName = "/system/build.prop"
-                    entry.linkFlag = TarArchiveEntry.LF_SYMLINK
+                    val entry = TarArchiveEntry("link", TarConstants.LF_SYMLINK).apply {
+                        linkName = "/system/build.prop"
+                    }
                     tarOutput.putArchiveEntry(entry)
                     tarOutput.closeArchiveEntry()
                     tarOutput.finish()
