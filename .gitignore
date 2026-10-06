@@ -5,3 +5,17 @@ local.properties
 *.iml
 .DS_Store
 app/build/
+
+# Build outputs
+*.apk
+*.aab
+
+# Signing material must never be committed
+*.jks
+*.keystore
+keystore/
+WinDroidPro/keystore/
+
+# Local release-signing properties
+keystore.properties
+release-signing.properties
