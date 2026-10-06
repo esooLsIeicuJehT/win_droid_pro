@@ -5,7 +5,6 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import java.io.File
 import java.util.concurrent.TimeUnit
 
 class RegistryManagerBenchmark {
@@ -13,7 +12,9 @@ class RegistryManagerBenchmark {
     @get:Rule
     val tempFolder = TemporaryFolder()
 
-    private val registryManager = RegistryManager()
+    private val registryManager = RegistryManager(object : CommandExecutor {
+        override fun execute(exe: String, args: String, workingDir: String): Int = 0
+    })
 
     @Test
     fun benchmarkApplyRegistryPatch() = runBlocking {
@@ -29,8 +30,7 @@ class RegistryManagerBenchmark {
             registryManager.applyRegistryPatch(container, patchFile)
         }
 
-        val endTime = System.nanoTime()
-        val duration = TimeUnit.NANOSECONDS.toMillis(endTime - startTime)
+        val duration = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime)
         println("applyRegistryPatch baseline ($iterations iterations): ${duration}ms")
     }
 
@@ -43,11 +43,15 @@ class RegistryManagerBenchmark {
         val startTime = System.nanoTime()
 
         repeat(iterations) { i ->
-            registryManager.setRegistryValue(container, "HKEY_CURRENT_USER\\Software\\Test", "Value$i", "Value$i")
+            registryManager.setRegistryValue(
+                container,
+                "HKEY_CURRENT_USER\\Software\\Test",
+                "Value$i",
+                "Value$i"
+            )
         }
 
-        val endTime = System.nanoTime()
-        val duration = TimeUnit.NANOSECONDS.toMillis(endTime - startTime)
+        val duration = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime)
         println("setRegistryValue baseline ($iterations iterations): ${duration}ms")
     }
 }
