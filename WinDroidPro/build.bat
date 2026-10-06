@@ -1,151 +1,113 @@
 @echo off
-REM WinDroid Pro - Build Script for Windows
-REM This script builds the WinDroid Pro APK on Windows
-
-setlocal enabledelayedexpansion
+setlocal EnableExtensions EnableDelayedExpansion
 
 echo ==========================================
 echo   WinDroid Pro - Build Script
+
 echo ==========================================
-echo.
 
-REM Check if we're in the right directory
 if not exist "settings.gradle" (
-    echo Error: Please run this script from the WinDroidPro directory
+    echo [ERROR] Run this script from the WinDroidPro directory.
     exit /b 1
 )
 
-echo Checking prerequisites...
-
-REM Check for Java
-java -version >nul 2>&1
+where java >nul 2>&1
 if errorlevel 1 (
-    echo Error: Java is not installed. Please install JDK 17 or later.
+    echo [ERROR] Java is not installed. Install JDK 17.
     exit /b 1
 )
+
 echo [OK] Java found
 
-REM Check for Android SDK
 if "%ANDROID_HOME%"=="" if "%ANDROID_SDK_ROOT%"=="" (
-    echo Error: Android SDK not found. Please set ANDROID_HOME or ANDROID_SDK_ROOT environment variable.
+    echo [ERROR] Android SDK not found. Set ANDROID_HOME or ANDROID_SDK_ROOT.
     exit /b 1
 )
 echo [OK] Android SDK found
 
-echo.
-echo ==========================================
-echo   Build Configuration
-echo ==========================================
-echo.
-
-REM Ask for build type
-echo Select build type:
-echo 1) Debug (faster build, includes debug symbols)
-echo 2) Release (optimized, smaller APK)
-set /p build_choice="Enter choice [1-2]: "
-
-if "%build_choice%"=="1" (
-    set BUILD_TYPE=Debug
-    set GRADLE_TASK=assembleDebug
-    set APK_PATH=app\build\outputs\apk\debug\app-debug.apk
-) else if "%build_choice%"=="2" (
-    set BUILD_TYPE=Release
-    set GRADLE_TASK=assembleRelease
-    set APK_PATH=app\build\outputs\apk\release\app-release-unsigned.apk
+if exist "gradlew.bat" (
+    set "GRADLE_CMD=call gradlew.bat"
 ) else (
-    echo Invalid choice. Defaulting to Debug build.
-    set BUILD_TYPE=Debug
-    set GRADLE_TASK=assembleDebug
-    set APK_PATH=app\build\outputs\apk\debug\app-debug.apk
-)
-
-echo Building %BUILD_TYPE% version...
-echo.
-
-REM Clean previous builds
-echo Cleaning previous builds...
-call gradlew.bat clean
-if errorlevel 1 (
-    echo Error: Clean failed
-    exit /b 1
-)
-echo [OK] Clean completed
-echo.
-
-REM Build the APK
-echo Building APK...
-echo This may take several minutes on first build...
-echo.
-
-call gradlew.bat %GRADLE_TASK%
-if errorlevel 1 (
-    echo Error: Build failed. Check the error messages above.
-    exit /b 1
-)
-
-echo.
-echo [OK] Build completed successfully!
-echo.
-
-REM Check if APK exists
-if exist "%APK_PATH%" (
-    echo ==========================================
-    echo   Build Summary
-    echo ==========================================
-    echo Build Type: %BUILD_TYPE%
-    echo APK Location: %APK_PATH%
-    
-    REM Get file size
-    for %%A in ("%APK_PATH%") do set APK_SIZE=%%~zA
-    set /a APK_SIZE_MB=!APK_SIZE! / 1048576
-    echo APK Size: !APK_SIZE_MB! MB
-    echo.
-    
-    if "%BUILD_TYPE%"=="Release" (
-        echo Note: Release APK is unsigned. You need to sign it before distribution.
-        echo.
-        echo To sign the APK:
-        echo 1. Create a keystore (if you don't have one):
-        echo    keytool -genkey -v -keystore windroidpro.keystore -alias windroidpro -keyalg RSA -keysize 2048 -validity 10000
-        echo.
-        echo 2. Sign the APK:
-        echo    jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore windroidpro.keystore %APK_PATH% windroidpro
-        echo.
-        echo 3. Align the APK:
-        echo    zipalign -v 4 %APK_PATH% app-release-signed.apk
+    where gradle >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] No Gradle wrapper is present and gradle is not installed.
+        echo         Install Gradle 8.2.1 or generate/commit the wrapper.
+        exit /b 1
     )
-    
-    echo.
-    echo [OK] Build process completed!
-    
-    REM Ask if user wants to install
-    if "%BUILD_TYPE%"=="Debug" (
-        echo.
-        set /p install_choice="Do you want to install the APK on a connected device? (y/n): "
-        if /i "!install_choice!"=="y" (
-            where adb >nul 2>&1
+    set "GRADLE_CMD=gradle"
+    echo [INFO] Gradle wrapper is not committed; using installed Gradle.
+)
+
+echo.
+echo Select build type:
+echo 1^) Debug
+echo 2^) Release ^(requires real runtime assets and external signing credentials^)
+set /p "BUILD_CHOICE=Enter choice [1-2]: "
+
+if "%BUILD_CHOICE%"=="1" (
+    set "BUILD_TYPE=Debug"
+    set "GRADLE_TASK=assembleDebug"
+    set "APK_DIR=app\build\outputs\apk\debug"
+) else if "%BUILD_CHOICE%"=="2" (
+    set "BUILD_TYPE=Release"
+    set "GRADLE_TASK=assembleRelease"
+    set "APK_DIR=app\build\outputs\apk\release"
+) else (
+    echo [ERROR] Invalid choice.
+    exit /b 1
+)
+
+if "%BUILD_TYPE%"=="Release" (
+    set "MISSING_SIGNING="
+    if "%WINDROID_RELEASE_STORE_FILE%"=="" set "MISSING_SIGNING=!MISSING_SIGNING! WINDROID_RELEASE_STORE_FILE"
+    if "%WINDROID_RELEASE_STORE_PASSWORD%"=="" set "MISSING_SIGNING=!MISSING_SIGNING! WINDROID_RELEASE_STORE_PASSWORD"
+    if "%WINDROID_RELEASE_KEY_ALIAS%"=="" set "MISSING_SIGNING=!MISSING_SIGNING! WINDROID_RELEASE_KEY_ALIAS"
+    if "%WINDROID_RELEASE_KEY_PASSWORD%"=="" set "MISSING_SIGNING=!MISSING_SIGNING! WINDROID_RELEASE_KEY_PASSWORD"
+    if not "!MISSING_SIGNING!"=="" (
+        echo [ERROR] Release signing is not configured. Missing:!MISSING_SIGNING!
+        exit /b 1
+    )
+)
+
+echo [INFO] Cleaning previous outputs...
+%GRADLE_CMD% --no-daemon clean
+if errorlevel 1 exit /b 1
+
+echo [INFO] Building %BUILD_TYPE%...
+%GRADLE_CMD% --no-daemon --stacktrace %GRADLE_TASK%
+if errorlevel 1 (
+    echo [ERROR] Build failed.
+    exit /b 1
+)
+
+set "APK_PATH="
+for %%F in ("%APK_DIR%\*.apk") do (
+    if exist "%%~fF" (
+        set "APK_PATH=%%~fF"
+        echo [OK] APK: %%~fF
+    )
+)
+
+if "!APK_PATH!"=="" (
+    echo [ERROR] Build completed without producing an APK in %APK_DIR%.
+    exit /b 1
+)
+
+if "%BUILD_TYPE%"=="Debug" (
+    where adb >nul 2>&1
+    if not errorlevel 1 (
+        set /p "INSTALL_CHOICE=Install the debug APK on a connected device? (y/N): "
+        if /I "!INSTALL_CHOICE!"=="y" (
+            adb install -r "!APK_PATH!"
             if errorlevel 1 (
-                echo Error: ADB not found. Please install Android SDK Platform Tools.
-            ) else (
-                echo Installing APK...
-                adb install -r "%APK_PATH%"
-                if errorlevel 1 (
-                    echo Error: Installation failed. Make sure USB debugging is enabled.
-                ) else (
-                    echo [OK] APK installed successfully!
-                )
+                echo [ERROR] APK installation failed.
+                exit /b 1
             )
+            echo [OK] APK installed.
         )
     )
-) else (
-    echo Error: APK not found at expected location: %APK_PATH%
-    exit /b 1
 )
 
-echo.
-echo ==========================================
-echo   Thank you for using WinDroid Pro!
-echo ==========================================
-
+echo [OK] %BUILD_TYPE% build completed.
 endlocal
-pause
+exit /b 0
