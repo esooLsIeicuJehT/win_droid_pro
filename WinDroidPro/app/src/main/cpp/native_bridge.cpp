@@ -2,6 +2,7 @@
 #include <android/log.h>
 #include <string>
 #include <cstring>
+#include <strings.h>
 #include <cerrno>
 #include <memory>
 #include <vector>
