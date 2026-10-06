@@ -19,7 +19,7 @@ class RegistryManager @Inject constructor(
 
     suspend fun applyRegistryPatch(container: Container, patchFile: File) = withContext(Dispatchers.IO) {
         require(patchFile.isFile) { "Registry patch does not exist: $patchFile" }
-        require(patchFile.length() in 1..MAX_PATCH_BYTES) {
+        require(patchFile.length() in 1L..MAX_PATCH_BYTES) {
             "Registry patch must be between 1 byte and $MAX_PATCH_BYTES bytes"
         }
 
@@ -29,7 +29,8 @@ class RegistryManager @Inject constructor(
 
     internal fun generateRegContent(keyPath: String, valueName: String, value: String): String {
         require(keyPath.isNotBlank()) { "Registry key path must not be blank" }
-        return "Windows Registry Editor Version 5.00\n" + generateRegFragment(keyPath, valueName, value)
+        return ("Windows Registry Editor Version 5.00\n" +
+            generateRegFragment(keyPath, valueName, value)).trimEnd()
     }
 
     suspend fun setRegistryValue(
