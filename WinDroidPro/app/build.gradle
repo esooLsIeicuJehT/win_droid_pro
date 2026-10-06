@@ -247,15 +247,8 @@ dependencies {
     implementation 'com.google.accompanist:accompanist-permissions:0.34.0'
     implementation 'com.google.accompanist:accompanist-systemuicontroller:0.34.0'
 
-    // File picker
+    // Scoped file access
     implementation 'androidx.documentfile:documentfile:1.0.1'
-
-    // USB support
-    implementation 'com.github.mik3y:usb-serial-for-android:3.7.3'
-
-    // Terminal emulator
-    implementation 'com.termux:terminal-emulator:0.118.0'
-    implementation 'com.termux:terminal-view:0.118.0'
 
     // Compression
     implementation 'org.apache.commons:commons-compress:1.25.0'
