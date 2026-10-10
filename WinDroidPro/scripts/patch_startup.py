@@ -3,7 +3,10 @@
 
 def patch_startup(java, replace):
     display = java / "com/winlator/XServerDisplayActivity.java"
-    replace(display, "    private DebugDialog debugDialog;", "    private DebugDialog debugDialog;\n    private com.winlator.core.StartupDiagnostics startupDiagnostics;")
+    replace(display, "    private DebugDialog debugDialog;", """    private DebugDialog debugDialog;
+    private com.winlator.core.StartupDiagnostics startupDiagnostics;
+    private volatile boolean startupCancelled;
+    private final java.util.concurrent.ExecutorService startupExecutor = Executors.newSingleThreadExecutor();""")
     replace(display, "        ProcessHelper.removeAllDebugCallbacks();",
             "        ProcessHelper.removeAllDebugCallbacks();\n        startupDiagnostics = new com.winlator.core.StartupDiagnostics(this, preloaderDialog);")
     replace(display, "        preloaderDialog.show(R.string.starting_up);",
@@ -12,21 +15,26 @@ def patch_startup(java, replace):
             '            public void onMapWindow(Window window) {\n                startupDiagnostics.append("X11 window mapped: " + window.id + "; class=" + window.getClassName());')
     replace(display, "                    preloaderDialog.closeOnUiThread();",
             "                    startupDiagnostics.desktopReady();")
+    replace(display, "        Executors.newSingleThreadExecutor().execute(() -> {", "        startupExecutor.execute(() -> {")
     replace(display, """            if (!isGenerateWineprefix()) {
                 setupWineSystemFiles();
                 extractGraphicsDriverFiles();
                 changeWineAudioDriver();
             }
             setupXEnvironment();""", """            try {
+                if (startupCancelled) return;
                 if (!isGenerateWineprefix()) {
                     startupDiagnostics.phase("Preparing Windows files");
                     setupWineSystemFiles();
+                    if (startupCancelled) return;
                     startupDiagnostics.phase("Installing graphics drivers");
                     startupDiagnostics.append("Graphics: " + graphicsDriver[0] + ", " + graphicsDriver[1] + "; wrapper=" + dxwrapper);
                     extractGraphicsDriverFiles();
+                    if (startupCancelled) return;
                     startupDiagnostics.phase("Setting up audio");
                     changeWineAudioDriver();
                 }
+                if (startupCancelled) return;
                 startupDiagnostics.phase("Preparing runtime services");
                 setupXEnvironment();
                 startupDiagnostics.phase("Waiting for the Windows desktop");
@@ -34,8 +42,19 @@ def patch_startup(java, replace):
             catch (Exception | LinkageError exception) {
                 startupDiagnostics.fail(exception);
             }""")
-    replace(display, "    protected void onDestroy() {",
-            "    protected void onDestroy() {\n        if (startupDiagnostics != null) startupDiagnostics.close();")
+    replace(display, """    protected void onDestroy() {
+        winHandler.stop();
+        if (environment != null) environment.stopEnvironmentComponents();""", """    protected void onDestroy() {
+        startupCancelled = true;
+        if (startupDiagnostics != null) startupDiagnostics.close();
+        winHandler.stop();
+        // Finish in-flight setup before cleanup, without blocking the UI.
+        startupExecutor.execute(() -> {
+            winHandler.stop();
+            if (environment != null) environment.stopEnvironmentComponents();
+        });
+        startupExecutor.shutdown();""")
+    replace(display, "        winHandler.start();", "        if (startupCancelled) return;\n        winHandler.start();")
     replace(display, ' : "-all");', ' : "+err,+warn");')
     replace(display, '        guestProgramLauncherComponent.setTerminationCallback((status) -> exit());', """        guestProgramLauncherComponent.setTerminationCallback((status) -> runOnUiThread(() -> {
             if (!startupDiagnostics.isReady() && !isGenerateWineprefix()) {
@@ -46,6 +65,10 @@ def patch_startup(java, replace):
 
     environment = java / "com/winlator/xenvironment/XEnvironment.java"
     replace(environment, "        for (EnvironmentComponent environmentComponent : this) environmentComponent.start();", """        for (EnvironmentComponent environmentComponent : this) {
+            if (context instanceof android.app.Activity) {
+                android.app.Activity activity = (android.app.Activity)context;
+                if (activity.isFinishing() || activity.isDestroyed()) return;
+            }
             com.winlator.core.StartupDiagnostics.phaseCurrent("Starting " + environmentComponent.getClass().getSimpleName());
             environmentComponent.start();
         }""")
