@@ -28,6 +28,8 @@ jobs:
         with:
           python-version: '3.12'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - uses: gradle/actions/setup-gradle@v4
       - name: Install build tools
         run: |
