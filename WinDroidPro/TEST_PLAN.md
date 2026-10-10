@@ -4,6 +4,7 @@
 
 - `python3 -m unittest discover -s scripts -p 'test_*.py' -v`: same-length ELF interpreter relocation and archive content/mode/symlink preservation.
 - `./gradlew :app:testDebugUnitTest`: Windows filename validation, repeated imports, path confinement, symlink-safe cleanup and executable/link preservation during copying.
+- `./gradlew :runtime:testDebugUnitTest`: startup reports retain recent failures with bounded memory and report size even under noisy native output.
 - `./gradlew :app:assembleDebug :app:lintDebug`: Kotlin/Java, native build, resource/manifest packaging and Android lint.
 - `python3 scripts/verify_runtime.py app/build/outputs/apk/debug/app-debug.apk`: actual APK assets, guest ELF loaders, path relocation, licenses, ARM64 native libraries and absence of empty runtime placeholders.
 
@@ -15,6 +16,7 @@ These checks require physical ARM64 Android hardware and are not established by 
 - Fresh install: home opens, bundled setup completes, readiness persists after restart, and insufficient free storage produces an actionable message.
 - Interrupt setup by force stopping the app; reopen and retry. Confirm previously installed container data is preserved on a runtime update.
 - Create the default Mali container. Confirm Windows desktop, mouse/touch, keyboard, audio and clean session exit. Repeat with the older-games profile.
+- Startup diagnosis: confirm elapsed time and stage updates before a window appears. A slow start offers waiting/report/exit after three minutes; choosing Exit preserves the container. Confirm the report remains accessible from home after force stopping the app. Reproduce an executable/spawn failure on a disposable test container and check for an actionable error instead of an endless spinner. When Windows opens during the timeout dialog, dismiss the warning and show the desktop.
 - Import a full folder containing an EXE, DLL and data file. Confirm folder layout on D:, launch from the library and launch an installer into C:. Import the same folder twice; neither copy should overwrite the first.
 - Cancel a picker, deny document access, rotate during import and test an invalid/reserved Windows filename. Confirm the UI remains usable and partial imports are hidden/cleaned.
 - Delete one container. Its C: files disappear, imported games survive, and other containers still launch. Delete or duplicate a container in advanced settings; the Compose list reflects it on returning.

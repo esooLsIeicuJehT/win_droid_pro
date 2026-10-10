@@ -10,7 +10,7 @@ import tarfile
 import zipfile
 
 import zstandard
-from prepare_runtime import NEW_PREFIX, OLD_PREFIX, PINNED_COMMIT
+from prepare_runtime import NEW_PREFIX, OLD_PREFIX, PINNED_COMMIT, application_prefix
 
 
 def interpreter(data):
@@ -28,7 +28,7 @@ def interpreter(data):
     return None
 
 
-def resolve_archive_path(name, links):
+def resolve_archive_path(name, links, new_prefix=NEW_PREFIX):
     for _ in range(40):
         parts = name.split("/")
         for length in range(1, len(parts) + 1):
@@ -36,8 +36,8 @@ def resolve_archive_path(name, links):
             if prefix not in links:
                 continue
             target = links[prefix]
-            if target.startswith(NEW_PREFIX.decode() + "/"):
-                target = target[len(NEW_PREFIX) + 1:]
+            if target.startswith(new_prefix.decode() + "/"):
+                target = target[len(new_prefix) + 1:]
             elif target.startswith("/"):
                 target = target.lstrip("/")
             else:
@@ -54,7 +54,8 @@ def verify(apk):
     with zipfile.ZipFile(apk) as package:
         report = json.loads(package.read("assets/windroid-runtime.json"))
         assert report["upstream"] == PINNED_COMMIT, "Unexpected engine version"
-        assert report["newPrefix"] == NEW_PREFIX.decode(), "Incorrect app directory"
+        new_prefix = application_prefix(report.get("applicationId", "com.windroidpro"))
+        assert report["newPrefix"] == new_prefix.decode(), "Incorrect app directory"
         assert package.getinfo("assets/WINLATOR-LICENSE.txt").file_size > 20000
         for library in ["winlator", "vortekrenderer", "gladiorenderer", "virglrenderer", "midihandler", "windroidpro"]:
             assert package.getinfo(f"lib/arm64-v8a/lib{library}.so").file_size > 0, library
@@ -83,11 +84,11 @@ def verify(apk):
                         value = interpreter(data)
                         if value:
                             totals["elfInterpreters"] += 1
-                            if value.startswith(NEW_PREFIX + b"/"):
-                                required_interpreters.add(value[len(NEW_PREFIX) + 1:].decode())
+                            if value.startswith(new_prefix + b"/"):
+                                required_interpreters.add(value[len(new_prefix) + 1:].decode())
         for name in ["opt/wine/bin/wine", "usr/lib/libc.so.6", "usr/lib/ld-linux-aarch64.so.1"]:
             assert name in rootfs_files, f"Missing runtime file: {name}"
-        resolved = {resolve_archive_path(name, rootfs_links) for name in required_interpreters}
+        resolved = {resolve_archive_path(name, rootfs_links, new_prefix) for name in required_interpreters}
         assert resolved <= rootfs_files, f"Missing ELF loaders: {resolved - rootfs_files}"
         for name in ["assets/box64/box64-0.4.4.tzst", "assets/container_pattern.tzst", "assets/graphics_driver/vortek-2.1.tzst"]:
             assert package.getinfo(name).file_size > 0, name

@@ -17,6 +17,7 @@ import subprocess
 import tarfile
 
 import zstandard
+from patch_startup import patch_startup
 
 PINNED_COMMIT = "3981d86efa4f333b2a34a7da8b6521476cd8c8b9"
 OLD_PREFIX = b"/data/data/com.winlator/files/rootfs"
@@ -24,11 +25,22 @@ NEW_PREFIX = b"/data/data/com.windroidpro/files/rfs"
 assert len(OLD_PREFIX) == len(NEW_PREFIX)
 
 
-def relocate_bytes(data):
-    return data.replace(OLD_PREFIX, NEW_PREFIX)
+def application_prefix(application_id):
+    if application_id not in ('com.windroidpro', 'com.windroiddbg'):
+        raise ValueError("Unsupported runtime application ID")
+    prefix = f"/data/data/{application_id}/files/rfs".encode()
+    if len(prefix) != len(OLD_PREFIX):
+        raise ValueError("Guest ELF relocation requires equal-length prefixes")
+    return prefix
 
 
-def relocate_archive(source, destination):
+def relocate_bytes(data, new_prefix=NEW_PREFIX):
+    if len(new_prefix) != len(OLD_PREFIX):
+        raise ValueError("Guest ELF relocation requires equal-length prefixes")
+    return data.replace(OLD_PREFIX, new_prefix)
+
+
+def relocate_archive(source, destination, new_prefix=NEW_PREFIX):
     replacements = 0
     with source.open("rb") as raw, destination.open("wb") as output:
         with zstandard.ZstdDecompressor().stream_reader(raw) as reader:
@@ -37,12 +49,12 @@ def relocate_archive(source, destination):
                     with tarfile.open(fileobj=writer, mode="w|", format=tarfile.GNU_FORMAT) as dst:
                         for original in src:
                             entry = copy.copy(original)
-                            entry.linkname = entry.linkname.replace(OLD_PREFIX.decode(), NEW_PREFIX.decode())
+                            entry.linkname = entry.linkname.replace(OLD_PREFIX.decode(), new_prefix.decode())
                             if entry.isfile():
                                 stream = src.extractfile(original)
                                 data = stream.read()
                                 replacements += data.count(OLD_PREFIX)
-                                data = relocate_bytes(data)
+                                data = relocate_bytes(data, new_prefix)
                                 dst.addfile(entry, io.BytesIO(data))
                             else:
                                 dst.addfile(entry)
@@ -85,12 +97,14 @@ def adapt_resource_switches(java_root):
     (java_root / "com/winlator/core/RuntimeMenuIds.java").write_text("\n".join(lines) + "\n")
 
 
-def prepare(source, output):
+def prepare(source, output, application_id='com.windroidpro'):
+    new_prefix = application_prefix(application_id)
     commit = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
     if commit != PINNED_COMMIT:
         raise RuntimeError(f"Expected upstream {PINNED_COMMIT}, found {commit}. Update the pin and review patches together.")
     subprocess.run(["git", "-C", str(source), "diff", "--quiet", "HEAD"], check=True)
-    fingerprint = hashlib.sha256(Path(__file__).read_bytes() + commit.encode()).hexdigest()
+    fingerprint = hashlib.sha256(Path(__file__).read_bytes() +
+                                 Path(__file__).with_name('patch_startup.py').read_bytes() + commit.encode() + new_prefix).hexdigest()
     marker = output / "prepared.json"
     if marker.is_file() and json.loads(marker.read_text()).get("fingerprint") == fingerprint:
         print("Pinned runtime already prepared")
@@ -109,8 +123,8 @@ def prepare(source, output):
     for path in (staging / "cpp").rglob("*"):
         if path.suffix in {".h", ".c", ".cpp"}:
             text = path.read_text()
-            patched = text.replace(OLD_PREFIX.decode(), NEW_PREFIX.decode()).replace(
-                "/data/data/com.winlator/cache", "/data/data/com.windroidpro/cache")
+            patched = text.replace(OLD_PREFIX.decode(), new_prefix.decode()).replace(
+                "/data/data/com.winlator/cache", f"/data/data/{application_id}/cache")
             if patched != text:
                 path.write_text(patched)
     replace_checked(staging / "cpp/winlator/include/time_utils.h",
@@ -122,7 +136,7 @@ def prepare(source, output):
                     '#define STB_DXT_IMPLEMENTATION',
                     '#include <string.h>\n#define STB_DXT_IMPLEMENTATION')
     replace_checked(staging / "java/com/winlator/core/AppUtils.java",
-                    "/data/data/com.winlator/storage", "/data/data/com.windroidpro/storage")
+                    "/data/data/com.winlator/storage", f"/data/data/{application_id}/storage")
     # Runtime migration versions belong to upstream, independent of our app's
     # versionCode. The pinned engine uses 33 in its container metadata.
     replace_checked(staging / "java/com/winlator/core/AppUtils.java",
@@ -137,6 +151,7 @@ def prepare(source, output):
     replace_checked(staging / "java/com/winlator/SettingsFragment.java",
                     'resetPreferenceVersions(AppCompatActivity activity)',
                     'resetPreferenceVersions(Context activity)')
+    patch_startup(staging / "java", replace_checked)
     adapt_resource_switches(staging / "java")
     # JNI callbacks are addressed by their original names, so consumer rules keep
     # them intact. Avoid the upstream launcher and its external-storage gate;
@@ -150,7 +165,7 @@ def prepare(source, output):
     assets_report = {}
     for path in sorted((staging / "assets").rglob("*.tzst")):
         temp = path.with_suffix(".relocated")
-        count = relocate_archive(path, temp)
+        count = relocate_archive(path, temp, new_prefix)
         temp.replace(path)
         assets_report[str(path.relative_to(staging / "assets"))] = count
     # Ship the runtime's license and build provenance in the actual APK.
@@ -160,7 +175,7 @@ def prepare(source, output):
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, destination)
     report = {"upstream": commit, "fingerprint": fingerprint, "oldPrefix": OLD_PREFIX.decode(),
-              "newPrefix": NEW_PREFIX.decode(), "archiveReplacements": assets_report}
+              "applicationId": application_id, "newPrefix": new_prefix.decode(), "archiveReplacements": assets_report}
     (staging / "prepared.json").write_text(json.dumps(report, indent=2) + "\n")
     (staging / "assets/windroid-runtime.json").write_text(json.dumps(report, indent=2) + "\n")
     shutil.rmtree(output, ignore_errors=True)
@@ -172,5 +187,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--application-id", default="com.windroidpro")
     args = parser.parse_args()
-    prepare(args.source.resolve(), args.output.resolve())
+    prepare(args.source.resolve(), args.output.resolve(), args.application_id)

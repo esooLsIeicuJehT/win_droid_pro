@@ -4,12 +4,16 @@ plugins {
 
 def upstream = rootProject.file('vendor/winlator')
 def prepared = layout.buildDirectory.dir('prepared').get().asFile
+def runtimeApplicationId = findProperty('windroidCheck') == 'true' ? 'com.windroiddbg' : 'com.windroidpro'
 def prepareRuntime = tasks.register('prepareRuntime', Exec) {
     inputs.file(rootProject.file('scripts/prepare_runtime.py'))
+    inputs.file(rootProject.file('scripts/patch_startup.py'))
+    inputs.property('applicationId', runtimeApplicationId)
     inputs.dir(new File(upstream, 'app/src/main'))
     outputs.dir(prepared)
     commandLine(System.getenv('WINDROID_PYTHON') ?: 'python3',
-            rootProject.file('scripts/prepare_runtime.py'), '--source', upstream, '--output', prepared)
+            rootProject.file('scripts/prepare_runtime.py'), '--source', upstream, '--output', prepared,
+            '--application-id', runtimeApplicationId)
 }
 
 android {
@@ -26,7 +30,7 @@ android {
     }
     sourceSets {
         main {
-            java.srcDirs = [new File(prepared, 'java')]
+            java.srcDirs = [new File(prepared, 'java'), 'src/main/java']
             res.srcDirs = [new File(prepared, 'res')]
             assets.srcDirs = [new File(prepared, 'assets')]
             jniLibs.srcDirs = [new File(prepared, 'jniLibs')]
@@ -51,4 +55,5 @@ dependencies {
     implementation 'org.tukaani:xz:1.9'
     implementation 'org.apache.commons:commons-compress:1.25.0'
     implementation 'androidx.lifecycle:lifecycle-process:2.7.0'
+    testImplementation 'junit:junit:4.13.2'
 }

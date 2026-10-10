@@ -1,5 +1,7 @@
 # Build instructions
 
+For an isolated phone test, add `-PwindroidCheck=true` to the Gradle build command. This builds **WinDroid Pro Check** (`com.windroiddbg`) alongside the normal app and relocates its guest binaries to that app's private directory. It requires its own runtime setup and does not share containers or games with the main install. GitHub Actions publishes both APK variants. Debug signing keys from separate CI runs may differ; avoid uninstalling an existing app with valuable data to work around a signature mismatch.
+
 Use a Linux, macOS or Windows build host with JDK 17, Python 3.10+ and Android SDK command-line tools. Official NDK host tools do not run directly in Android/Termux; use GitHub Actions when building from your phone.
 
 ## First build

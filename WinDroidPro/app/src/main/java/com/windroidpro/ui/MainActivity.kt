@@ -25,6 +25,7 @@ import timber.log.Timber
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.windroidpro.runtime.RuntimeLauncher
 import com.windroidpro.ui.library.GameLibraryActivity
+import com.winlator.core.StartupDiagnostics
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -162,6 +163,9 @@ fun MainScreen(
             ) {
                 Text("Runtime settings")
             }
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedButton(onClick = { StartupDiagnostics.showLatest(context as android.app.Activity) },
+                modifier = Modifier.fillMaxWidth()) { Text("Startup report") }
             Spacer(modifier = Modifier.height(16.dp))
             OutlinedButton(onClick = { RuntimeLauncher.settings(context, com.winlator.R.id.menu_item_input_controls) },
                 modifier = Modifier.fillMaxWidth(), enabled = runtime.ready) { Text("Touch and controller layouts") }

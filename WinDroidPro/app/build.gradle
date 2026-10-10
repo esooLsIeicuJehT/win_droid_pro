@@ -11,13 +11,14 @@ android {
     ndkVersion '27.2.12479018'
 
     defaultConfig {
-        applicationId "com.windroidpro"
+        applicationId findProperty('windroidCheck') == 'true' ? 'com.windroiddbg' : 'com.windroidpro'
+        manifestPlaceholders = [windroidLabel: findProperty('windroidCheck') == 'true' ? 'WinDroid Pro Check' : '@string/app_name']
         minSdk 26
         // The glibc/Wine runtime executes in app-private storage. Android's
         // target-29 W^X restriction blocks that established runtime model.
         targetSdk 28
-        versionCode 2
-        versionName "1.1.0"
+        versionCode 3
+        versionName "1.1.1"
         
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         

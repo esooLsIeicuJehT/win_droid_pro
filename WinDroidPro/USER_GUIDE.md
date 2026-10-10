@@ -16,8 +16,11 @@ Start with a simple Windows program and older, lightweight games. Lower resoluti
 ## Troubleshooting
 
 - Setup failure: read the displayed error, free storage and retry. Interrupted setup stages are cleaned safely, and existing runtime/container backups are preserved during replacement.
+- Desktop stays on startup: the screen shows the current step and elapsed time. After three minutes, choose **Keep waiting**, **View report**, or **Exit**. The warning does not delete or reset the container. Process failures display an error immediately. **Startup report** on the home screen reopens the saved report; use **Copy** to provide the error text. The report includes device/page-size information, launch stages and recent Wine/Box64 output, stays on the phone and is replaced by the next session.
 - Game will not open: test the Windows desktop, confirm the whole game folder was imported, then try the compatibility profile. Some installers require additional Windows components from the advanced container editor.
 - Need logs: enable Wine/Box64 logging in Runtime settings, reproduce the failure, and use the session drawer's Logs view. The [test plan](TEST_PLAN.md) lists information needed for useful reports.
 - USB: the USB screen inventories Android devices. It does not install Windows drivers or route arbitrary USB tools into Wine.
 
 Back up valuable data before uninstalling or clearing app storage; those actions remove local games and containers. The advanced runtime UI includes container export/import functions. Keep your original game files as well.
+
+**WinDroid Pro Check** is a separate diagnostic installation. Install its runtime and create a Mali container inside it, then launch the desktop and use **Startup report → Copy**. It leaves the normal WinDroid Pro install intact and needs its own free storage. Each CI test APK may have a different debug signer; this diagnostic app avoids replacing your normal installation.

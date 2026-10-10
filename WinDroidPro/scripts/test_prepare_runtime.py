@@ -6,11 +6,23 @@ import tempfile
 import unittest
 
 import zstandard
-from prepare_runtime import NEW_PREFIX, OLD_PREFIX, relocate_archive, relocate_bytes
+from prepare_runtime import NEW_PREFIX, OLD_PREFIX, relocate_archive, relocate_bytes, application_prefix
 from verify_runtime import resolve_archive_path
 
 
 class RuntimeRelocationTest(unittest.TestCase):
+    def test_check_package_does_not_reference_the_original_apps_data(self):
+        prefix = application_prefix('com.windroiddbg')
+        self.assertEqual(len(OLD_PREFIX), len(prefix))
+        payload = OLD_PREFIX + b'/usr/lib/ld-linux-aarch64.so.1\0'
+        relocated = relocate_bytes(payload, prefix)
+        self.assertEqual(len(payload), len(relocated))
+        self.assertNotIn(NEW_PREFIX, relocated)
+        self.assertEqual('usr/lib/loader', resolve_archive_path('lib/loader',
+            {'lib': prefix.decode() + '/usr/lib'}, prefix))
+        with self.assertRaises(ValueError):
+            application_prefix('com.windroidpro.check')
+
     def test_guest_loader_lookup_follows_directory_symlinks(self):
         self.assertEqual("usr/lib/ld-linux-aarch64.so.1", resolve_archive_path(
             "lib/ld-linux-aarch64.so.1", {"lib": "usr/lib"}))
