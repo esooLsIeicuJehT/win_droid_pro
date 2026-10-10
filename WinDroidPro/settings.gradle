@@ -11,10 +11,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven { url 'https://jitpack.io' }
-        jcenter() // For legacy Termux dependencies
     }
 }
 
 rootProject.name = "WinDroidPro"
-include ':app'
+include ':app', ':runtime'

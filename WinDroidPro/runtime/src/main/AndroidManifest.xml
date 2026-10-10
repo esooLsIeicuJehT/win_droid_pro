@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <application>
+        <activity android:name="com.winlator.MainActivity" android:exported="false"
+            android:theme="@style/AppThemeDark"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation" />
+        <activity android:name="com.winlator.XServerDisplayActivity" android:exported="false"
+            android:theme="@style/AppThemeFullscreenDark" android:supportsPictureInPicture="true"
+            android:launchMode="singleTask" android:screenOrientation="sensorLandscape"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation" />
+        <activity android:name="com.winlator.ControlsEditorActivity" android:exported="false"
+            android:theme="@style/AppThemeFullscreenDark" android:screenOrientation="sensorLandscape" />
+        <activity android:name="com.winlator.ExternalControllerBindingsActivity" android:exported="false"
+            android:theme="@style/AppThemeDark" />
+        <service android:name="com.winlator.services.ForegroundService" android:enabled="true"
+            android:exported="false" android:foregroundServiceType="mediaPlayback" android:stopWithTask="false" />
+        <provider android:name="com.winlator.RuntimeFileProvider" android:authorities="${applicationId}.runtime.fileprovider"
+            android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/runtime_file_paths" />
+        </provider>
+    </application>
+</manifest>

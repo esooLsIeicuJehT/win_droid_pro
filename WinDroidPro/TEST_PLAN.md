@@ -1,60 +1,27 @@
-# WinDroid Pro Test Plan
+# Validation
 
-This document outlines the testing strategy for WinDroid Pro, focusing on compatibility, performance, and stability.
+## Automated checks
 
-## 1. Application Compatibility Testing
+- `python3 -m unittest discover -s scripts -p 'test_*.py' -v`: same-length ELF interpreter relocation and archive content/mode/symlink preservation.
+- `./gradlew :app:testDebugUnitTest`: Windows filename validation, repeated imports, path confinement, symlink-safe cleanup and executable/link preservation during copying.
+- `./gradlew :runtime:testDebugUnitTest`: startup reports retain recent failures with bounded memory and report size even under noisy native output.
+- `./gradlew :app:assembleDebug :app:lintDebug`: Kotlin/Java, native build, resource/manifest packaging and Android lint.
+- `python3 scripts/verify_runtime.py app/build/outputs/apk/debug/app-debug.apk`: actual APK assets, guest ELF loaders, path relocation, licenses, ARM64 native libraries and absence of empty runtime placeholders.
 
-### 1.1 Windows Applications
-**Goal:** Verify that common Windows applications run correctly.
-**Test Cases:**
-- **Productivity:** Install and run Notepad++, LibreOffice. Verify file operations (Open/Save).
-- **Games:** Run lightweight 2D games (e.g., Stardew Valley) and 3D titles (if GPU supported). Check FPS and input responsiveness.
-- **Utilities:** Test 7-Zip for archive handling.
+## Phone acceptance checklist
 
-### 1.2 Bypass Tools (FRP/iOS)
-**Goal:** Verify specialized tools for device management work via USB/Network.
-**Test Cases:**
-- **FRP Bypass Tools:**
-    - Connect a locked Android device via USB OTG.
-    - Launch the FRP tool within WinDroid Pro.
-    - Verify the tool detects the connected device (requires USB Passthrough).
-    - Attempt a read/write operation.
-- **iOS Bypass Tools:**
-    - Connect an iOS device in DFU/Recovery mode.
-    - Launch the iOS tool.
-    - Verify device detection.
-    - **Note:** Driver support (USBDK/libusb) in Wine is critical here. Ensure `NativeUsbManager` is active.
+These checks require physical ARM64 Android hardware and are not established by a successful build.
 
-## 2. Hardware Compatibility
+- Record exact phone model, Android version, physical RAM, GPU/Vulkan driver, kernel page size, APK version and signer. Root shell `getconf PAGESIZE` or `adb shell getconf PAGESIZE` reports the page size. The bundled prebuilt audio libraries still need validation on 16 KB systems; current device testing should begin on 4 KB-page devices.
+- Fresh install: home opens, bundled setup completes, readiness persists after restart, and insufficient free storage produces an actionable message.
+- Interrupt setup by force stopping the app; reopen and retry. Confirm previously installed container data is preserved on a runtime update.
+- Create the default Mali container. Confirm Windows desktop, mouse/touch, keyboard, audio and clean session exit. Repeat with the older-games profile.
+- Startup diagnosis: confirm elapsed time and stage updates before a window appears. A slow start offers waiting/report/exit after three minutes; choosing Exit preserves the container. Confirm the report remains accessible from home after force stopping the app. Reproduce an executable/spawn failure on a disposable test container and check for an actionable error instead of an endless spinner. When Windows opens during the timeout dialog, dismiss the warning and show the desktop.
+- Import a full folder containing an EXE, DLL and data file. Confirm folder layout on D:, launch from the library and launch an installer into C:. Import the same folder twice; neither copy should overwrite the first.
+- Cancel a picker, deny document access, rotate during import and test an invalid/reserved Windows filename. Confirm the UI remains usable and partial imports are hidden/cleaned.
+- Delete one container. Its C: files disappear, imported games survive, and other containers still launch. Delete or duplicate a container in advanced settings; the Compose list reflects it on returning.
+- Update an older scaffold installation with the same signer. Existing Room rows remain; their Windows environments are created on first launch. The old scaffold did not contain working Wine prefixes, so there are no old runtime binaries to preserve.
+- Test touch layouts and a paired controller. Check suspend/resume, device rotation and background behavior.
+- Test a lightweight Windows game for 10 minutes before a heavier game. Record title/version, graphics profile, resolution, steady FPS, temperature and whether it crashes. Compare RAM Boost settings using the same scene; the storage-backed setting is not physical RAM.
 
-### 2.1 USB Devices
-**Goal:** Ensure USB OTG devices are detected and accessible in the container.
-**Test Cases:**
-- **Storage:** Plug in a USB Drive. Verify it appears as a drive letter in Wine.
-- **Serial Devices:** Connect a USB-to-Serial adapter. Check COM port mapping.
-- **ADB/Fastboot:** Connect an Android phone. Run `adb devices` inside the container.
-
-## 3. Performance Optimization
-
-### 3.1 ARM Translation (Box64)
-**Goal:** specific presets improve performance for different workloads.
-**Test Cases:**
-- **Performance Preset:** Run a CPU-intensive benchmark (e.g., 7-Zip benchmark). Record scores.
-- **Stability Preset:** Run a long-running task to check for crashes.
-- **Verification:** Check `BOX64_DYNAREC` env vars are set correctly using `taskmgr` or `cmd /c set`.
-
-### 3.2 Memory Usage
-**Goal:** Minimize memory footprint.
-**Test Cases:**
-- Monitor memory usage via Android Studio Profiler during container startup and shutdown.
-- Verify `optimizeMemory()` (mallopt) reduces RSS after app closure.
-
-## 4. Benchmarking Procedure
-
-1.  **Launch Benchmark App:** Use the internal `PerformanceBenchmark` test suite.
-2.  **Environment:** Close background apps.
-3.  **Metrics:** Record Startup Time, Memory Peak, and JNI Latency.
-
-## 5. Automated Tests
-- Unit tests are located in `app/src/test/java/`.
-- Run via `./gradlew test`.
+For failures include the error text or Wine/Box64 log, game build, phone details and reproduction steps. Successful desktop launch does not mean every Windows game is compatible.

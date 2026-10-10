@@ -1,314 +1,41 @@
-# WinDroid Pro - Build Instructions
+# Build instructions
 
-## Prerequisites
+For an isolated phone test, add `-PwindroidCheck=true` to the Gradle build command. This builds **WinDroid Pro Check** (`com.windroiddbg`) alongside the normal app and relocates its guest binaries to that app's private directory. It requires its own runtime setup and does not share containers or games with the main install. GitHub Actions publishes both APK variants. Debug signing keys from separate CI runs may differ; avoid uninstalling an existing app with valuable data to work around a signature mismatch.
 
-### Required Software
-1. **Android Studio** (Hedgehog 2023.1.1 or later)
-   - Download from: https://developer.android.com/studio
-   
-2. **Android NDK** (r26 or later)
-   - Install via Android Studio SDK Manager
-   - Or download from: https://developer.android.com/ndk/downloads
-   
-3. **CMake** (3.22.1 or later)
-   - Install via Android Studio SDK Manager
-   
-4. **Git**
-   - Download from: https://git-scm.com/downloads
+Use a Linux, macOS or Windows build host with JDK 17, Python 3.10+ and Android SDK command-line tools. Official NDK host tools do not run directly in Android/Termux; use GitHub Actions when building from your phone.
 
-### System Requirements
-- **OS**: Windows 10/11, macOS 10.14+, or Linux (Ubuntu 20.04+)
-- **RAM**: 8GB minimum, 16GB recommended
-- **Storage**: 10GB free space
-- **Java**: JDK 17 (included with Android Studio)
+## First build
 
-## Build Steps
+From the repository root:
 
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/yourusername/windroidpro.git
-cd windroidpro/WinDroidPro
+```sh
+git submodule update --init --recursive
+cd WinDroidPro
+python3 -m pip install -r scripts/requirements.txt
+sdkmanager "platforms;android-35" "build-tools;34.0.0" "platform-tools" "ndk;27.2.12479018" "cmake;3.22.1"
+sdkmanager --licenses
 ```
 
-### 2. Open in Android Studio
+Set `JAVA_HOME` to your JDK 17 and `ANDROID_HOME` to the SDK directory, or create ignored `local.properties` with `sdk.dir=/absolute/path/to/android-sdk`. On Windows use `gradlew.bat` and set `WINDROID_PYTHON=python` if `python3` is unavailable.
 
-```bash
-# On macOS/Linux
-studio .
-
-# On Windows
-start studio .
+```sh
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug
+python3 scripts/verify_runtime.py app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Or manually:
-1. Open Android Studio
-2. File → Open
-3. Navigate to `WinDroidPro` folder
-4. Click "Open"
+The debug APK is signed for local testing and appears at `app/build/outputs/apk/debug/app-debug.apk`. First builds download Gradle/dependencies, relocate bundled runtime paths and compile native code; allow several minutes and several GB of build storage. Runtime preparation is cached in `runtime/build/prepared`.
 
-### 3. Configure SDK and NDK
+The preparation script requires the pinned, unmodified upstream commit. Change its pin and review all patches together when updating the engine. Never change `com.windroidpro` or the `rfs` runtime-directory name without also reviewing guest ELF paths; their equal-length replacement preserves binary offsets.
 
-1. Open SDK Manager (Tools → SDK Manager)
-2. Install required components:
-   - Android SDK Platform 34
-   - Android SDK Build-Tools 34.0.0
-   - NDK (Side by side) version 26.x
-   - CMake version 3.22.1
+## Release
 
-### 4. Sync Gradle
-
-1. Wait for Gradle sync to complete automatically
-2. Or manually: File → Sync Project with Gradle Files
-
-### 5. Build the Project
-
-#### Debug Build (for testing)
-```bash
-./gradlew assembleDebug
+```sh
+./gradlew :app:assembleRelease
 ```
 
-Output: `app/build/outputs/apk/debug/app-debug.apk`
+The release APK is **unsigned**. Use your own private signing key and Android SDK `zipalign` followed by `apksigner`; do not use a repository-provided key. Keep the same signer for future upgrades. Runtime JNI classes are retained by consumer rules.
 
-#### Release Build (for distribution)
-```bash
-./gradlew assembleRelease
-```
+## GitHub Actions
 
-Output: `app/build/outputs/apk/release/app-release-unsigned.apk`
-
-### 6. Sign the APK (Release Only)
-
-#### Generate Keystore (first time only)
-```bash
-keytool -genkey -v -keystore windroidpro.keystore -alias windroidpro -keyalg RSA -keysize 2048 -validity 10000
-```
-
-#### Sign the APK
-```bash
-jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore windroidpro.keystore app/build/outputs/apk/release/app-release-unsigned.apk windroidpro
-```
-
-#### Align the APK
-```bash
-zipalign -v 4 app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/WinDroidPro.apk
-```
-
-## Build Variants
-
-### Debug Build
-- Includes debug symbols
-- Logging enabled
-- No code obfuscation
-- Larger APK size
-- Use for development and testing
-
-### Release Build
-- Optimized code
-- ProGuard/R8 enabled
-- Logging removed
-- Smaller APK size
-- Use for distribution
-
-## Troubleshooting
-
-### Gradle Sync Failed
-**Solution**: 
-1. Check internet connection
-2. File → Invalidate Caches / Restart
-3. Delete `.gradle` folder and sync again
-
-### NDK Not Found
-**Solution**:
-1. Open SDK Manager
-2. Install NDK (Side by side)
-3. Update `local.properties`:
-   ```
-   ndk.dir=/path/to/Android/sdk/ndk/26.x.xxxxx
-   ```
-
-### CMake Error
-**Solution**:
-1. Install CMake via SDK Manager
-2. Update `build.gradle` CMake version if needed
-
-### Out of Memory
-**Solution**:
-Update `gradle.properties`:
-```
-org.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8
-```
-
-### Build Too Slow
-**Solution**:
-Enable parallel builds in `gradle.properties`:
-```
-org.gradle.parallel=true
-org.gradle.caching=true
-```
-
-## Advanced Build Options
-
-### Custom Build Configuration
-
-Edit `app/build.gradle` to customize:
-
-```gradle
-android {
-    defaultConfig {
-        // Change package name
-        applicationId "com.yourcompany.windroidpro"
-        
-        // Change version
-        versionCode 2
-        versionName "1.1.0"
-        
-        // Target specific ABIs
-        ndk {
-            abiFilters 'arm64-v8a'  // Only ARM64
-        }
-    }
-}
-```
-
-### Build Specific ABI
-
-```bash
-# ARM64 only
-./gradlew assembleRelease -Pandroid.injected.build.abi=arm64-v8a
-
-# ARMv7 only
-./gradlew assembleRelease -Pandroid.injected.build.abi=armeabi-v7a
-```
-
-### Clean Build
-
-```bash
-./gradlew clean
-./gradlew assembleRelease
-```
-
-## CI/CD Integration
-
-### GitHub Actions
-
-Create `.github/workflows/build.yml`:
-
-```yaml
-name: Build APK
-
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up JDK 17
-      uses: actions/setup-java@v3
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v2
-      
-    - name: Build with Gradle
-      run: |
-        cd WinDroidPro
-        chmod +x gradlew
-        ./gradlew assembleRelease
-        
-    - name: Upload APK
-      uses: actions/upload-artifact@v3
-      with:
-        name: app-release
-        path: WinDroidPro/app/build/outputs/apk/release/*.apk
-```
-
-## Build Optimization
-
-### Reduce APK Size
-
-1. Enable R8 full mode (already enabled)
-2. Remove unused resources:
-   ```gradle
-   android {
-       buildTypes {
-           release {
-               shrinkResources true
-               minifyEnabled true
-           }
-       }
-   }
-   ```
-
-3. Use APK splits:
-   ```gradle
-   android {
-       splits {
-           abi {
-               enable true
-               reset()
-               include 'arm64-v8a', 'armeabi-v7a'
-               universalApk false
-           }
-       }
-   }
-   ```
-
-### Speed Up Build
-
-1. Use Gradle daemon (enabled by default)
-2. Enable parallel execution
-3. Use build cache
-4. Increase heap size
-
-## Verification
-
-### Test the APK
-
-```bash
-# Install on connected device
-adb install app/build/outputs/apk/release/WinDroidPro.apk
-
-# Check logs
-adb logcat | grep WinDroid
-```
-
-### Verify Signature
-
-```bash
-jarsigner -verify -verbose -certs WinDroidPro.apk
-```
-
-## Distribution
-
-### Google Play Store
-1. Create app bundle:
-   ```bash
-   ./gradlew bundleRelease
-   ```
-2. Upload to Play Console
-
-### Direct Distribution
-1. Sign the APK
-2. Upload to GitHub Releases
-3. Share download link
-
-## Support
-
-For build issues:
-- Check [GitHub Issues](https://github.com/yourusername/windroidpro/issues)
-- Read [Documentation](https://github.com/yourusername/windroidpro/wiki)
-- Ask in [Discussions](https://github.com/yourusername/windroidpro/discussions)
-
----
-
-**Happy Building! 🚀**
+The Build APK workflow checks out submodules, installs Python/runtime tools, runs host and JVM tests plus Android lint, builds the debug APK, checks bundled guest loaders and uploads the APK as an artifact. It runs on pull requests, pushes to main/master and manual dispatch. A passing workflow does not replace testing on an ARM64 Android phone.

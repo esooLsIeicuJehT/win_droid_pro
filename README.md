@@ -1,130 +1,42 @@
-🎉 WinDroid Pro
+# WinDroid Pro
 
-Welcome!
+WinDroid Pro runs supported Windows programs on ARM64 Android using an embedded, pinned Winlator engine (Wine 10.10, Box64 0.4.4, X server, audio and input). The Android interface provides runtime setup, Windows containers and importing complete game folders.
 
-A comprehensive and advanced Windows emulator for Android that significantly surpasses Winlator and all existing solutions.
+This is a device-testing build. Building successfully does not establish game compatibility or FPS. Test the Windows desktop first, then a lightweight game before demanding titles.
 
-🚀 Quick Start 
+## What is implemented
 
-Step 1: Extract the ZIP
-```bash
-unzip WinDroidPro-Complete.zip
-cd WinDroidPro
+- Bundled runtime installation with progress, storage checks and retry after interrupted setup.
+- Actual Wine container creation, launching and deletion; existing scaffold database rows are migrated without dropping data.
+- Android document-picker imports of extracted folders and files, with executables launched from the library. Imported folders are shared on D: across containers.
+- Embedded display, audio, touch/controller layouts and advanced engine settings.
+- An 800×600 Vortek/Gladio profile for Mali devices, plus a 640×480 WineD3D/VirGL compatibility profile.
+- Android USB device listing. Windows USB-driver passthrough is not implemented.
+
+## Your Moto G
+
+The starting target is a Moto G 2026 with 4 GB physical RAM and Mali graphics. The additional “12 GB” RAM Boost option uses storage; it does not upgrade the GPU or provide 12 GB physical RAM. Start with the Mali profile and test older Windows games. This app does not emulate Switch, 3DS or PS4.
+
+Root is not required. No game performance or demanding Monster Hunter compatibility is promised. See the [phone validation checklist](WinDroidPro/TEST_PLAN.md).
+
+## Build and use
+
+Clone with the pinned runtime submodule:
+
+```sh
+git clone --recurse-submodules https://github.com/esooLsIeicuJehT/win_droid_pro.git
+cd win_droid_pro/WinDroidPro
+python3 -m pip install -r scripts/requirements.txt
+./gradlew :app:assembleDebug :app:testDebugUnitTest
+python3 scripts/verify_runtime.py app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Step 2: Open in Android Studio
-1. Launch Android Studio
-2. Click "Open"
-3. Select the `WinDroidPro` folder
-4. Wait for Gradle sync
+Requires JDK 17, Python 3.10+, Android SDK 35, NDK 27.2.12479018 and CMake 3.22.1. Detailed steps are in [BUILD_INSTRUCTIONS.md](WinDroidPro/BUILD_INSTRUCTIONS.md). GitHub Actions builds an APK for pull requests and manual runs.
 
-Step 3: Build the APK
-- **Easy Way**: Click Build → Build APK(s)
-- **Script Way**: Run `./build.sh` (Linux/Mac) or `build.bat` (Windows)
-- **Command Way**: Run `./gradlew assembleDebug`
+Install the APK, choose **Install runtime**, create a container, then open its Windows desktop. Use **Game library → Import folder** for a complete extracted game, and select its executable and container. See the [user guide](WinDroidPro/USER_GUIDE.md).
 
-Your APK will be in `app/build/outputs/apk/`
+WinDroid Pro uses application ID `com.windroidpro` and can coexist with Winlator. This build targets Android API 28 because its guest programs execute from app-private storage; it is distributed by sideloading, not through Google Play.
 
-📖 Where to Start
+## Source and licenses
 
- For Quick Building:
-👉 **Read QUICK_START.md** - Get building in 5 minutes
-
-For Detailed Instructions:
-👉 **Read BUILD_INSTRUCTIONS.md** - Complete build guide with troubleshooting
-
-For Understanding the Project:
-👉 **Read TECHNICAL_SPECIFICATION.md** - Architecture and design details
-
-For Deployment:
-👉 **Read DEPLOYMENT_GUIDE.md** - How to release and distribute
-
-For Users:
-👉 **Read README.md** - User documentation and features
-
-🎯 What Makes This Special
-
-1. Superior USB OTG Support ⭐
-- **First-class USB device passthrough**
-- Native control and bulk transfers
-- Driver emulation layer
-- Support for storage, serial, HID, audio devices
-
-2. Better Than Winlator ⭐
-- Modern Material Design 3 UI
-- Professional MVVM architecture
-- Comprehensive documentation
-- Production-ready code quality
-
-3. Complete Package ⭐
-- Full source code
-- Build scripts included
-- 10,000+ words of documentation
-- Ready to build and deploy
-
-4. Target Applications ⭐
-- FRP bypass tools (Samsung, LG, Huawei)
-- iOS bypass tools (iCloud, backup extractors)
-- General Windows applications
-
-🔧 System Requirements
-
-To Build:
-- Android Studio Hedgehog (2023.1.1+)
-- Android SDK 34
-- Android NDK r26+
-- CMake 3.22+
-- 8GB RAM minimum
-
- To Run:
-- Android 8.0+ (API 26+)
-- ARM64 processor
-- 4GB RAM minimum
-- 2GB storage
-- USB OTG support (optional)
-
-📱 Build Methods
-
-ethod 1: Android Studio (Recommended)
-1. Open project in Android Studio
-2. Wait for Gradle sync
-3. Click Build → Build APK(s)
-4. Done!
-
-Method 2: Build Scripts
-```bash
-# Linux/macOS
-./build.sh
-
-# Windows
-build.bat
-```
-
-Method 3: Command Line
-```bash
-# Debug build
-./gradlew assembleDebug
-
-# Release build
-./gradlew assembleRelease
-```
-
-
-Short-term (1-2 days):
-1. 🔧 Test the APK on your device
-2. 🔧 Customize branding and colors
-3. 🔧 Add app icons
-4. 🔧 Complete UI screens
-
-To Make Fully Functional (3-5 days):
-1. 🔧 Add Wine 9.x binaries
-2. 🔧 Add Box64 binaries
-3. 🔧 Add graphics libraries (Mesa, DXVK, VKD3D)
-4. 🔧 Package assets
-5. 🔧 Test with target applications
-
-Build Logs:
-Check `app/build/outputs/logs/` for detailed error messages
-
-**License**: MIT
-**Created**: 2025
+The existing WinDroid Pro interface was described as MIT-licensed. Embedded engine and dependencies keep their respective licenses; this application is not wholly MIT. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). All runtime integration changes and rebuild instructions are available in this repository; upstream is pinned at `3981d86efa4f333b2a34a7da8b6521476cd8c8b9`.
