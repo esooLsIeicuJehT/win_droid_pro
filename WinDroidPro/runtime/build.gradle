@@ -1,0 +1,54 @@
+plugins {
+    id 'com.android.library'
+}
+
+def upstream = rootProject.file('vendor/winlator')
+def prepared = layout.buildDirectory.dir('prepared').get().asFile
+def prepareRuntime = tasks.register('prepareRuntime', Exec) {
+    inputs.file(rootProject.file('scripts/prepare_runtime.py'))
+    inputs.dir(new File(upstream, 'app/src/main'))
+    outputs.dir(prepared)
+    commandLine(System.getenv('WINDROID_PYTHON') ?: 'python3',
+            rootProject.file('scripts/prepare_runtime.py'), '--source', upstream, '--output', prepared)
+}
+
+android {
+    namespace 'com.winlator'
+    compileSdk 35
+    ndkVersion '27.2.12479018'
+    defaultConfig {
+        minSdk 26
+        consumerProguardFiles 'consumer-rules.pro'
+        ndk { abiFilters 'arm64-v8a' }
+        externalNativeBuild {
+            cmake { arguments '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON' }
+        }
+    }
+    sourceSets {
+        main {
+            java.srcDirs = [new File(prepared, 'java')]
+            res.srcDirs = [new File(prepared, 'res')]
+            assets.srcDirs = [new File(prepared, 'assets')]
+            jniLibs.srcDirs = [new File(prepared, 'jniLibs')]
+        }
+    }
+    externalNativeBuild { cmake { path 'CMakeLists.txt'; version '3.22.1' } }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+tasks.configureEach {
+    if (name == 'preBuild' || name.startsWith('configureCMake')) dependsOn(prepareRuntime)
+}
+
+dependencies {
+    api 'androidx.appcompat:appcompat:1.6.1'
+    api 'androidx.preference:preference:1.2.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'com.github.luben:zstd-jni:1.5.6-6@aar'
+    implementation 'org.tukaani:xz:1.9'
+    implementation 'org.apache.commons:commons-compress:1.25.0'
+    implementation 'androidx.lifecycle:lifecycle-process:2.7.0'
+}

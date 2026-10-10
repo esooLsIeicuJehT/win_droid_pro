@@ -14,12 +14,14 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.windroidpro.data.Container
-import java.util.UUID
+import com.windroidpro.runtime.RuntimeProfile
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,7 +31,19 @@ fun ContainerScreen(
     viewModel: ContainerViewModel = hiltViewModel()
 ) {
     val containers by viewModel.containers.collectAsState()
+    val runtime by viewModel.runtime.collectAsState()
+    val busy by viewModel.busy.collectAsState()
+    val error by viewModel.error.collectAsState()
     var showCreateDialog by rememberSaveable { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf<Container?>(null) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.refresh()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Scaffold(
         topBar = {
@@ -50,7 +64,7 @@ fun ContainerScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showCreateDialog = true }) {
+            FloatingActionButton(onClick = { if (runtime.ready && !busy) showCreateDialog = true }) {
                 Icon(Icons.Default.Add, contentDescription = "Create Container")
             }
         }
@@ -63,7 +77,7 @@ fun ContainerScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "No containers found. Create one to get started.",
+                    text = if (!runtime.ready) "Install the Windows runtime from Home first." else "No containers yet. Tap + to create one.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -79,8 +93,10 @@ fun ContainerScreen(
                 items(containers, key = { it.id }) { container ->
                     ContainerItem(
                         container = container,
-                        onClick = { onContainerClick(container) },
-                        onDelete = { viewModel.deleteContainer(container) }
+                        onClick = { if (runtime.ready && !busy) viewModel.launch(container) { id ->
+                            onContainerClick(container.copy(runtimeId = id))
+                        } },
+                        onDelete = { if (!busy) pendingDelete = container }
                     )
                 }
             }
@@ -89,11 +105,25 @@ fun ContainerScreen(
         if (showCreateDialog) {
             CreateContainerDialog(
                 onDismiss = { showCreateDialog = false },
-                onCreate = { name, desc ->
-                    viewModel.createContainer(name, desc)
+                onCreate = { name, desc, profile ->
+                    viewModel.createContainer(name, desc, profile)
                     showCreateDialog = false
                 }
             )
+        }
+        if (busy) AlertDialog(onDismissRequest = {}, title = { Text("Preparing container…") },
+            text = { LinearProgressIndicator(Modifier.fillMaxWidth()) }, confirmButton = {})
+        error?.let { message -> AlertDialog(onDismissRequest = viewModel::clearError,
+            title = { Text("Container error") }, text = { Text(message) },
+            confirmButton = { TextButton(onClick = viewModel::clearError) { Text("OK") } }) }
+        pendingDelete?.let { selected ->
+            AlertDialog(onDismissRequest = { pendingDelete = null }, title = { Text("Delete ${selected.name}?") },
+                text = { Text("This removes its Windows settings and files installed on C:. Your imported game folders stay in the library.") },
+                confirmButton = { TextButton(onClick = {
+                    pendingDelete = null; viewModel.deleteContainer(selected)
+                }) { Text("Delete") } }, dismissButton = {
+                    TextButton(onClick = { pendingDelete = null }) { Text("Cancel") }
+                })
         }
     }
 }
@@ -180,10 +210,11 @@ fun ContainerItem(
 @Composable
 fun CreateContainerDialog(
     onDismiss: () -> Unit,
-    onCreate: (String, String) -> Unit
+    onCreate: (String, String, RuntimeProfile) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
+    var profile by remember { mutableStateOf(RuntimeProfile.MALI) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -203,11 +234,19 @@ fun CreateContainerDialog(
                     label = { Text("Description") },
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Starting profile", style = MaterialTheme.typography.titleSmall)
+                RuntimeProfile.entries.forEach { option ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = profile == option, onClick = { profile = option })
+                        Text(option.label)
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
-                onClick = { onCreate(name, description) },
+                onClick = { onCreate(name, description, profile) },
                 enabled = name.isNotBlank()
             ) {
                 Text("Create")
