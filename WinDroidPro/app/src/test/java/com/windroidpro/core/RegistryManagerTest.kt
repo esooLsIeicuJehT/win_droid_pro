@@ -30,7 +30,7 @@ class RegistryManagerTest {
             "TestDword"=dword:00000001
         """.trimIndent()
 
-        assertEquals(expected, content)
+        assertEquals(expected + "\n", content)
     }
 
     @Test
@@ -48,7 +48,7 @@ class RegistryManagerTest {
             "TestString"="Hello World"
         """.trimIndent()
 
-        assertEquals(expected, content)
+        assertEquals(expected + "\n", content)
     }
 
     @Test
@@ -66,7 +66,7 @@ class RegistryManagerTest {
             "TestPath"="C:\\Windows\\System32"
         """.trimIndent()
 
-        assertEquals(expected, content)
+        assertEquals(expected + "\n", content)
     }
 
     @Test
@@ -84,7 +84,7 @@ class RegistryManagerTest {
             @="DefaultValue"
         """.trimIndent()
 
-        assertEquals(expected, content)
+        assertEquals(expected + "\n", content)
     }
 
     @Test
@@ -102,7 +102,7 @@ class RegistryManagerTest {
             @="DefaultValue"
         """.trimIndent()
 
-        assertEquals(expected, content)
+        assertEquals(expected + "\n", content)
     }
 
     @Test
@@ -120,7 +120,7 @@ class RegistryManagerTest {
             "BinaryData"=hex:01,02,03,04
         """.trimIndent()
 
-        assertEquals(expected, content)
+        assertEquals(expected + "\n", content)
     }
 
     @Test

@@ -24,6 +24,8 @@ data class Container(
     val createdAt: Long = System.currentTimeMillis(),
     val lastUsed: Long = System.currentTimeMillis(),
     val isRunning: Boolean = false,
+    @ColumnInfo(defaultValue = "0")
+    val runtimeId: Int = 0,
     
     // Configuration
     val screenWidth: Int = 1280,

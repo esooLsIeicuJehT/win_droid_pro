@@ -1,7 +1,6 @@
 package com.windroidpro.core
 
 import com.windroidpro.data.Container
-import com.windroidpro.native_bridge.NativeBridge
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -37,12 +36,9 @@ class ServiceManager @Inject constructor(
 
     fun startService(container: Container, serviceName: String) {
         Timber.d("Starting service $serviceName in container ${container.name}")
-        val netExe = java.io.File(container.prefixPath, "drive_c/windows/system32/net.exe")
-
-        val result = NativeBridge.executeApp(
-            exePath = netExe.absolutePath,
-            args = "start \"$serviceName\""
-        )
+        val workingDir = java.io.File(container.prefixPath, "drive_c/windows/system32").absolutePath
+        val escaped = serviceName.replace("\"", "\\\"")
+        val result = commandExecutor.execute("net", "start \"$escaped\"", workingDir)
 
         if (result == 0) {
             Timber.i("Service $serviceName started successfully")
@@ -53,12 +49,9 @@ class ServiceManager @Inject constructor(
 
     fun stopService(container: Container, serviceName: String) {
         Timber.d("Stopping service $serviceName in container ${container.name}")
-        val netExe = java.io.File(container.prefixPath, "drive_c/windows/system32/net.exe")
-
-        val result = NativeBridge.executeApp(
-            exePath = netExe.absolutePath,
-            args = "stop \"$serviceName\""
-        )
+        val workingDir = java.io.File(container.prefixPath, "drive_c/windows/system32").absolutePath
+        val escaped = serviceName.replace("\"", "\\\"")
+        val result = commandExecutor.execute("net", "stop \"$escaped\"", workingDir)
 
         if (result == 0) {
             Timber.i("Service $serviceName stopped successfully")

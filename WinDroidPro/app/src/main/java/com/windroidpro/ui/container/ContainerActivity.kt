@@ -1,7 +1,7 @@
 package com.windroidpro.ui.container
 
 import android.os.Bundle
-import android.widget.Toast
+import com.windroidpro.runtime.RuntimeLauncher
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,8 +26,7 @@ class ContainerActivity : ComponentActivity() {
                     ContainerScreen(
                         onBackClick = { finish() },
                         onContainerClick = { container ->
-                            Toast.makeText(this@ContainerActivity, "Launching ${container.name}...", Toast.LENGTH_SHORT).show()
-                            // Logic to launch container would go here
+                            RuntimeLauncher.desktop(this@ContainerActivity, container.runtimeId)
                         }
                     )
                 }

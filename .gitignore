@@ -1,7 +1,11 @@
-.gradle/
-build/
-local.properties
+**/.gradle/
+**/build/
+**/.cxx/
+**/local.properties
+**/__pycache__/
+*.apk
+*.aab
+*.keystore
+*.jks
 .idea/
-*.iml
 .DS_Store
-app/build/

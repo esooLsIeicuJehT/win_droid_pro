@@ -7,36 +7,32 @@ plugins {
 
 android {
     namespace 'com.windroidpro'
-    compileSdk 34
+    compileSdk 35
+    ndkVersion '27.2.12479018'
 
     defaultConfig {
-        applicationId "com.windroidpro"
+        applicationId findProperty('windroidCheck') == 'true' ? 'com.windroiddbg' : 'com.windroidpro'
+        manifestPlaceholders = [windroidLabel: findProperty('windroidCheck') == 'true' ? 'WinDroid Pro Check' : '@string/app_name']
         minSdk 26
-        targetSdk 34
-        versionCode 1
-        versionName "1.0.0"
+        // The glibc/Wine runtime executes in app-private storage. Android's
+        // target-29 W^X restriction blocks that established runtime model.
+        targetSdk 28
+        versionCode 3
+        versionName "1.1.1"
         
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         
         ndk {
-            abiFilters 'arm64-v8a', 'armeabi-v7a'
+            abiFilters 'arm64-v8a'
         }
         
         externalNativeBuild {
             cmake {
                 cppFlags "-std=c++17 -frtti -fexceptions"
                 arguments "-DANDROID_STL=c++_shared",
-                          "-DANDROID_PLATFORM=android-26"
+                          "-DANDROID_PLATFORM=android-26",
+                          "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
             }
-        }
-    }
-
-    signingConfigs {
-        release {
-            storeFile file("../keystore/release.jks")
-            storePassword "android"
-            keyAlias "windroidpro"
-            keyPassword "android"
         }
     }
 
@@ -44,7 +40,6 @@ android {
         release {
             minifyEnabled true
             shrinkResources true
-            signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             
             ndk {
@@ -82,6 +77,12 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = '1.5.8'
     }
+
+    lint {
+        // Sideloaded Wine uses API-28 execution behavior. Google Play's target
+        // policy does not apply to this distribution; keep other lint checks.
+        disable 'ExpiredTargetSdkVersion'
+    }
     
     packagingOptions {
         resources {
@@ -94,6 +95,7 @@ android {
 }
 
 dependencies {
+    implementation project(':runtime')
     // Core Android
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -148,13 +150,6 @@ dependencies {
     
     // File picker
     implementation 'androidx.documentfile:documentfile:1.0.1'
-    
-    // USB support
-    implementation 'com.github.mik3y:usb-serial-for-android:3.7.3'
-    
-    // Terminal emulator
-    implementation 'com.termux:terminal-emulator:0.118.0'
-    implementation 'com.termux:terminal-view:0.118.0'
     
     // Compression
     implementation 'org.apache.commons:commons-compress:1.25.0'
