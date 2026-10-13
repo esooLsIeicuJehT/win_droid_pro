@@ -17,6 +17,7 @@ class ContainerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Timber.d("ContainerActivity created")
+
         setContent {
             WinDroidProTheme {
                 Surface(

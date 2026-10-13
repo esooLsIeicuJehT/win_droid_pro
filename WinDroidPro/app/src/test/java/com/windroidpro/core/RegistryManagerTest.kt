@@ -13,7 +13,8 @@ class RegistryManagerTest {
     @get:Rule
     val tempFolder = TemporaryFolder()
 
-    private val registryManager = RegistryManager()
+    private val commandExecutor = RecordingCommandExecutor()
+    private val registryManager = RegistryManager(commandExecutor)
 
     @Test
     fun generateRegContent_handlesDword() {
@@ -124,6 +125,25 @@ class RegistryManagerTest {
     }
 
     @Test
+    fun applyRegistryPatch_executesRegedit() = runBlocking {
+        val containerDir = tempFolder.newFolder("apply_prefix")
+        File(containerDir, "drive_c/windows/system32").mkdirs()
+        val patchFile = tempFolder.newFile("apply.reg").apply {
+            writeText("Windows Registry Editor Version 5.00\n")
+        }
+        val container = Container(name = "TestContainer", prefixPath = containerDir.absolutePath)
+
+        registryManager.applyRegistryPatch(container, patchFile)
+
+        assertEquals("regedit", commandExecutor.lastExe)
+        assertEquals(true, commandExecutor.lastArgs?.startsWith("/S \"C:\\windroid\\imports\\registry_"))
+        assertEquals(
+            File(containerDir, "drive_c/windows/system32").absolutePath,
+            commandExecutor.lastWorkingDir
+        )
+    }
+
+    @Test
     fun getRegistryValue_readsStringValue() = runBlocking {
         val containerDir = tempFolder.newFolder("container_prefix")
         val userReg = File(containerDir, "user.reg")
@@ -136,17 +156,13 @@ class RegistryManagerTest {
             "TestBackslash"="C:\\Windows"
         """.trimIndent())
 
-        // Create a dummy container with minimal required fields
-        val container = Container(
-            name = "TestContainer",
-            prefixPath = containerDir.absolutePath
-        )
+        val container = Container(name = "TestContainer", prefixPath = containerDir.absolutePath)
 
         val value = registryManager.getRegistryValue(container, "HKCU\\Software\\Test", "TestString")
         assertEquals("Hello World", value)
 
         val escaped = registryManager.getRegistryValue(container, "HKCU\\Software\\Test", "TestEscaped")
-        assertEquals("Line1\"Line2", escaped) // Check unescaping logic
+        assertEquals("Line1\"Line2", escaped)
 
         val backslash = registryManager.getRegistryValue(container, "HKCU\\Software\\Test", "TestBackslash")
         assertEquals("C:\\Windows", backslash)
@@ -163,10 +179,7 @@ class RegistryManagerTest {
             "TestDword"=dword:00000001
         """.trimIndent())
 
-        val container = Container(
-            name = "TestContainer",
-            prefixPath = containerDir.absolutePath
-        )
+        val container = Container(name = "TestContainer", prefixPath = containerDir.absolutePath)
 
         val value = registryManager.getRegistryValue(container, "HKLM\\Software\\Test", "TestDword")
         assertEquals("dword:00000001", value)
@@ -183,10 +196,7 @@ class RegistryManagerTest {
             @="DefaultVal"
         """.trimIndent())
 
-        val container = Container(
-            name = "TestContainer",
-            prefixPath = containerDir.absolutePath
-        )
+        val container = Container(name = "TestContainer", prefixPath = containerDir.absolutePath)
 
         val value = registryManager.getRegistryValue(container, "HKCU\\Software\\Test", "")
         assertEquals("DefaultVal", value)
@@ -206,10 +216,7 @@ class RegistryManagerTest {
             "Existing"="Value"
         """.trimIndent())
 
-        val container = Container(
-            name = "TestContainer",
-            prefixPath = containerDir.absolutePath
-        )
+        val container = Container(name = "TestContainer", prefixPath = containerDir.absolutePath)
 
         val value = registryManager.getRegistryValue(container, "HKCU\\Software\\Test", "NonExistent")
         assertEquals(null, value)
@@ -229,17 +236,25 @@ class RegistryManagerTest {
             "TestString"="Hello World"
         """.trimIndent())
 
-        val container = Container(
-            name = "TestContainer",
-            prefixPath = containerDir.absolutePath
-        )
+        val container = Container(name = "TestContainer", prefixPath = containerDir.absolutePath)
 
-        // Test with different casing in key path
         val valueKey = registryManager.getRegistryValue(container, "HKCU\\SOFTWARE\\TEST", "TestString")
         assertEquals("Hello World", valueKey)
 
-        // Test with different casing in value name
         val valueName = registryManager.getRegistryValue(container, "HKCU\\Software\\Test", "TESTSTRING")
         assertEquals("Hello World", valueName)
+    }
+
+    private class RecordingCommandExecutor : CommandExecutor {
+        var lastExe: String? = null
+        var lastArgs: String? = null
+        var lastWorkingDir: String? = null
+
+        override fun execute(exe: String, args: String, workingDir: String): Int {
+            lastExe = exe
+            lastArgs = args
+            lastWorkingDir = workingDir
+            return 0
+        }
     }
 }

@@ -16,11 +16,11 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import dagger.hilt.android.AndroidEntryPoint
 import com.windroidpro.R
 import com.windroidpro.ui.container.ContainerActivity
 import com.windroidpro.ui.theme.WinDroidProTheme
 import com.windroidpro.ui.usb.UsbDevicesScreen
+import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.windroidpro.runtime.RuntimeLauncher
@@ -29,12 +29,10 @@ import com.winlator.core.StartupDiagnostics
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
         Timber.d("MainActivity created")
-        
+
         setContent {
             WinDroidProTheme {
                 Surface(
@@ -49,8 +47,8 @@ class MainActivity : ComponentActivity() {
 }
 
 sealed class Screen(val route: String) {
-    object Home : Screen("home")
-    object UsbDevices : Screen("usb_devices")
+    data object Home : Screen("home")
+    data object UsbDevices : Screen("usb_devices")
 }
 
 @Composable
@@ -103,19 +101,22 @@ fun MainScreen(
             verticalArrangement = Arrangement.Top
         ) {
             Text(
-                text = stringResource(id = R.string.welcome_message, stringResource(id = R.string.app_name)),
+                text = stringResource(
+                    id = R.string.welcome_message,
+                    stringResource(id = R.string.app_name)
+                ),
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground
             )
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             Text(
                 text = stringResource(id = R.string.app_description),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onBackground
             )
-            
+
             Spacer(modifier = Modifier.height(32.dp))
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
@@ -133,14 +134,13 @@ fun MainScreen(
             
             Button(
                 onClick = {
-                    val intent = Intent(context, ContainerActivity::class.java)
-                    context.startActivity(intent)
+                    context.startActivity(Intent(context, ContainerActivity::class.java))
                 },
                 modifier = Modifier.fillMaxWidth(), enabled = runtime.ready
             ) {
                 Text("Manage Containers")
             }
-            
+
             Spacer(modifier = Modifier.height(16.dp))
             Button(onClick = { context.startActivity(Intent(context, GameLibraryActivity::class.java)) },
                 modifier = Modifier.fillMaxWidth(), enabled = runtime.ready) { Text("Game library") }

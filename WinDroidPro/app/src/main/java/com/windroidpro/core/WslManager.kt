@@ -1,43 +1,37 @@
 package com.windroidpro.core
 
 import com.windroidpro.data.Container
-import com.windroidpro.native_bridge.NativeBridge
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * WSL support is intentionally disabled until a real Linux userspace backend is
+ * integrated. Previous builds created a batch file that only echoed a WSL-like
+ * message, which made the feature appear functional when it was not.
+ */
 @Singleton
 class WslManager @Inject constructor() {
 
     fun configureWsl(container: Container) {
-        if (container.enableWSL) {
-            Timber.d("Enabling WSL mode for container ${container.name}")
-            // Create a wsl.bat in system32 to simulate WSL command
-            val system32 = java.io.File(container.prefixPath, "drive_c/windows/system32")
-            if (system32.exists()) {
-                val wslBat = java.io.File(system32, "wsl.bat")
-                try {
-                    // Simple simulation that launches cmd.exe as if it were a shell
-                    wslBat.writeText("@echo off\r\ncmd.exe /k \"echo WSL simulation mode\"")
-                } catch (e: Exception) {
-                    Timber.e(e, "Failed to create WSL shim")
-                }
-            }
-        }
+        if (!container.enableWSL) return
+
+        val message =
+            "WSL is enabled for ${container.name}, but no Linux userspace backend is installed. " +
+                "Refusing to start simulated WSL mode."
+        Timber.e(message)
+        throw UnsupportedOperationException(message)
     }
 
     fun launchWslShell(container: Container) {
-        Timber.d("Launching WSL shell for container ${container.name}")
-        // Execute bash inside the container environment
-        if (container.enableWSL) {
-            try {
-                // Launch the WSL shim created during configuration
-                NativeBridge.executeApp("cmd.exe", "/c wsl.bat", "C:\\")
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to launch WSL shell")
-            }
-        } else {
+        if (!container.enableWSL) {
             Timber.w("WSL is not enabled for container ${container.name}")
+            return
         }
+
+        val message =
+            "Cannot launch WSL for ${container.name}: the production WSL backend is not implemented."
+        Timber.e(message)
+        throw UnsupportedOperationException(message)
     }
 }
