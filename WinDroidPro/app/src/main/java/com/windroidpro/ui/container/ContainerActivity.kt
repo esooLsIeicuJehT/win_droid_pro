@@ -1,7 +1,7 @@
 package com.windroidpro.ui.container
 
 import android.os.Bundle
-import android.widget.Toast
+import com.windroidpro.runtime.RuntimeLauncher
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,15 +27,7 @@ class ContainerActivity : ComponentActivity() {
                     ContainerScreen(
                         onBackClick = { finish() },
                         onContainerClick = { container ->
-                            Timber.w(
-                                "Launch requested for %s, but the production Wine/Box64 runtime launcher is not integrated",
-                                container.name
-                            )
-                            Toast.makeText(
-                                this@ContainerActivity,
-                                "Runtime launch is blocked until the real Wine/Box64 payload and launcher are installed.",
-                                Toast.LENGTH_LONG
-                            ).show()
+                            RuntimeLauncher.desktop(this@ContainerActivity, container.runtimeId)
                         }
                     )
                 }

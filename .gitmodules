@@ -1,0 +1,3 @@
+[submodule "WinDroidPro/vendor/winlator"]
+	path = WinDroidPro/vendor/winlator
+	url = https://github.com/brunodev85/winlator-app.git

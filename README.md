@@ -1,92 +1,42 @@
 # WinDroid Pro
 
-WinDroid Pro is an Android project for running Windows applications through a Wine + ARM translation runtime, with container management, graphics translation, and USB host integration as the target architecture.
+WinDroid Pro runs supported Windows programs on ARM64 Android using an embedded, pinned Winlator engine (Wine 10.10, Box64 0.4.4, X server, audio and input). The Android interface provides runtime setup, Windows containers and importing complete game folders.
 
-> **Status: pre-production.** The Android/native foundation builds toward that goal, but the repository does not yet contain a complete Windows runtime. Release builds are intentionally blocked while the required runtime assets are placeholders and until the real provisioning/launch path is implemented. See [`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md).
+This is a device-testing build. Building successfully does not establish game compatibility or FPS. Test the Windows desktop first, then a lightweight game before demanding titles.
 
 ## What is implemented
 
-- Android application shell using Kotlin, Compose, Hilt, Room, and JNI/C++.
-- Container records and app-private prefix directories.
-- USB host UI/native I/O foundation with JNI transfer validation.
-- Runtime configuration helpers for registry, networking, services, DXVK/VKD3D setup, and clipboard integration.
-- Hardened tar.xz extraction for future runtime payload installation.
-- CI gates for unit tests, Android lint, native compilation, and debug APK assembly.
-- Release signing configuration sourced outside the repository.
-- Release-time integrity gates that reject missing/placeholder runtime archives.
+- Bundled runtime installation with progress, storage checks and retry after interrupted setup.
+- Actual Wine container creation, launching and deletion; existing scaffold database rows are migrated without dropping data.
+- Android document-picker imports of extracted folders and files, with executables launched from the library. Imported folders are shared on D: across containers.
+- Embedded display, audio, touch/controller layouts and advanced engine settings.
+- An 800×600 Vortek/Gladio profile for Mali devices, plus a 640×480 WineD3D/VirGL compatibility profile.
+- Android USB device listing. Windows USB-driver passthrough is not implemented.
 
-## What is not release-ready yet
+## Your Moto G
 
-The following six files are currently development placeholders and must be replaced by audited, compatible runtime artifacts before release:
+The starting target is a Moto G 2026 with 4 GB physical RAM and Mali graphics. The additional “12 GB” RAM Boost option uses storage; it does not upgrade the GPU or provide 12 GB physical RAM. Start with the Mali profile and test older Windows games. This app does not emulate Switch, 3DS or PS4.
 
-- `wine-9.0-x86.tar.xz`
-- `wine-9.0-x86_64.tar.xz`
-- `box64.tar.xz`
-- `mesa.tar.xz`
-- `dxvk.tar.xz`
-- `vkd3d.tar.xz`
+Root is not required. No game performance or demanding Monster Hunter compatibility is promised. See the [phone validation checklist](WinDroidPro/TEST_PLAN.md).
 
-The end-to-end runtime installer, Wine prefix provisioning, Box64/Wine launch chain, graphics backend qualification, application picker/launcher, and physical-device compatibility pass also remain release blockers. WinDroid Pro should not be distributed as a finished emulator until those gates are complete.
+## Build and use
 
-## Requirements
+Clone with the pinned runtime submodule:
 
-### Build
-
-- JDK 17
-- Android SDK 34
-- Android Build Tools 34.0.0
-- Android NDK `26.1.10909125`
-- CMake 3.22.1
-- Gradle 8.2.1 when a Gradle wrapper is not present
-
-### Target device
-
-The current Android configuration targets API 26+ and builds ARM ABIs. Actual runtime/device support will be documented only after the real runtime stack has been qualified on physical hardware.
-
-## Build a debug APK
-
-```bash
-cd WinDroidPro
-./build.sh
+```sh
+git clone --recurse-submodules https://github.com/esooLsIeicuJehT/win_droid_pro.git
+cd win_droid_pro/WinDroidPro
+python3 -m pip install -r scripts/requirements.txt
+./gradlew :app:assembleDebug :app:testDebugUnitTest
+python3 scripts/verify_runtime.py app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Or, with Gradle 8.2.1 installed:
+Requires JDK 17, Python 3.10+, Android SDK 35, NDK 27.2.12479018 and CMake 3.22.1. Detailed steps are in [BUILD_INSTRUCTIONS.md](WinDroidPro/BUILD_INSTRUCTIONS.md). GitHub Actions builds an APK for pull requests and manual runs.
 
-```bash
-cd WinDroidPro
-gradle --no-daemon testDebugUnitTest lintDebug assembleDebug
-```
+Install the APK, choose **Install runtime**, create a container, then open its Windows desktop. Use **Game library → Import folder** for a complete extracted game, and select its executable and container. See the [user guide](WinDroidPro/USER_GUIDE.md).
 
-The APK is produced under:
+WinDroid Pro uses application ID `com.windroidpro` and can coexist with Winlator. This build targets Android API 28 because its guest programs execute from app-private storage; it is distributed by sideloading, not through Google Play.
 
-```text
-WinDroidPro/app/build/outputs/apk/debug/
-```
+## Source and licenses
 
-## Release builds
-
-Release builds deliberately fail unless both conditions are true:
-
-1. Every required runtime archive exists, is non-placeholder content, and has a valid XZ header.
-2. A new release signing key is provided outside source control.
-
-Expected signing environment variables:
-
-```text
-WINDROID_RELEASE_STORE_FILE
-WINDROID_RELEASE_STORE_PASSWORD
-WINDROID_RELEASE_KEY_ALIAS
-WINDROID_RELEASE_KEY_PASSWORD
-```
-
-The historical repository keystore must **not** be reused. It was committed to Git history and therefore must be treated as compromised.
-
-## Security and release policy
-
-A successful debug build is not considered proof of emulator functionality. User-visible capabilities must work end-to-end on real hardware before being advertised as supported. Placeholder assets, simulated subsystems, hardcoded release credentials, and fake-success launch paths are release blockers.
-
-See [`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md) for the full definition of done.
-
-## License
-
-Project source is declared MIT in the existing project metadata. Before distributing bundled Wine, Box64, Mesa, DXVK, VKD3D, or other third-party runtime components, add their exact licenses, source/provenance information, and any required notices to the release package.
+The existing WinDroid Pro interface was described as MIT-licensed. Embedded engine and dependencies keep their respective licenses; this application is not wholly MIT. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). All runtime integration changes and rebuild instructions are available in this repository; upstream is pinned at `3981d86efa4f333b2a34a7da8b6521476cd8c8b9`.

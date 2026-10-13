@@ -4,22 +4,11 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -33,6 +22,10 @@ import com.windroidpro.ui.theme.WinDroidProTheme
 import com.windroidpro.ui.usb.UsbDevicesScreen
 import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.windroidpro.runtime.RuntimeLauncher
+import com.windroidpro.ui.library.GameLibraryActivity
+import com.winlator.core.StartupDiagnostics
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -83,10 +76,11 @@ fun MainNavigation() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
-    onNavigateToUsbDevices: () -> Unit
+    onNavigateToUsbDevices: () -> Unit,
+    viewModel: RuntimeViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-
+    val runtime by viewModel.state.collectAsState()
     Scaffold(
         topBar = {
             TopAppBar(
@@ -101,9 +95,10 @@ fun MainScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(paddingValues)
                 .padding(16.dp),
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.Top
         ) {
             Text(
                 text = stringResource(
@@ -123,24 +118,57 @@ fun MainScreen(
             )
 
             Spacer(modifier = Modifier.height(32.dp))
-
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(runtime.message, style = MaterialTheme.typography.titleMedium)
+                    if (runtime.installing) LinearProgressIndicator(
+                        progress = runtime.progress / 100f,
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
+                    if (!runtime.ready && !runtime.installing) {
+                        Text("Setup installs the bundled Windows runtime. Keep this app open until it finishes.", Modifier.padding(vertical = 8.dp))
+                        Button(onClick = viewModel::install) { Text("Install runtime") }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            
             Button(
                 onClick = {
                     context.startActivity(Intent(context, ContainerActivity::class.java))
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(), enabled = runtime.ready
             ) {
                 Text("Manage Containers")
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-
+            Button(onClick = { context.startActivity(Intent(context, GameLibraryActivity::class.java)) },
+                modifier = Modifier.fillMaxWidth(), enabled = runtime.ready) { Text("Game library") }
+            Spacer(modifier = Modifier.height(16.dp))
+            
             Button(
                 onClick = onNavigateToUsbDevices,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("USB Devices")
             }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Button(
+                onClick = {
+                    RuntimeLauncher.settings(context)
+                },
+                modifier = Modifier.fillMaxWidth(), enabled = runtime.ready
+            ) {
+                Text("Runtime settings")
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedButton(onClick = { StartupDiagnostics.showLatest(context as android.app.Activity) },
+                modifier = Modifier.fillMaxWidth()) { Text("Startup report") }
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedButton(onClick = { RuntimeLauncher.settings(context, com.winlator.R.id.menu_item_input_controls) },
+                modifier = Modifier.fillMaxWidth(), enabled = runtime.ready) { Text("Touch and controller layouts") }
         }
     }
 }

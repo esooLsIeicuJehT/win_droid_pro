@@ -37,25 +37,23 @@ class ServiceManager @Inject constructor(
     }
 
     fun startService(container: Container, serviceName: String) {
-        executeServiceCommand(container, "start", serviceName)
+        Timber.d("Starting service $serviceName in container ${container.name}")
+        val workingDir = java.io.File(container.prefixPath, "drive_c/windows/system32").absolutePath
+        val escaped = serviceName.replace("\"", "\\\"")
+        val result = commandExecutor.execute("net", "start \"$escaped\"", workingDir)
+
+        if (result == 0) {
+            Timber.i("Service $serviceName started successfully")
+        } else {
+            Timber.e("Failed to start service $serviceName. Exit code: $result")
+        }
     }
 
     fun stopService(container: Container, serviceName: String) {
-        executeServiceCommand(container, "stop", serviceName)
-    }
-
-    private fun executeServiceCommand(container: Container, action: String, serviceName: String) {
-        require(serviceName.isNotBlank()) { "Service name must not be blank" }
-
-        val workingDir = File(container.prefixPath, "drive_c/windows/system32").absolutePath
-        val escapedServiceName = escapeQuotedArgument(serviceName)
-        Timber.d("${action.replaceFirstChar { it.uppercase() }}ing service $serviceName in ${container.name}")
-
-        val result = commandExecutor.execute(
-            exe = "net",
-            args = "$action \"$escapedServiceName\"",
-            workingDir = workingDir
-        )
+        Timber.d("Stopping service $serviceName in container ${container.name}")
+        val workingDir = java.io.File(container.prefixPath, "drive_c/windows/system32").absolutePath
+        val escaped = serviceName.replace("\"", "\\\"")
+        val result = commandExecutor.execute("net", "stop \"$escaped\"", workingDir)
 
         if (result == 0) {
             Timber.i("Service $serviceName ${if (action == "start") "started" else "stopped"} successfully")

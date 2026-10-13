@@ -14,6 +14,9 @@ interface ContainerDao {
     @Query("SELECT * FROM containers ORDER BY lastUsed DESC")
     fun getAllContainers(): Flow<List<Container>>
 
+    @Query("SELECT * FROM containers ORDER BY lastUsed DESC")
+    suspend fun getAllContainersOnce(): List<Container>
+
     @Query("SELECT * FROM containers WHERE id = :id")
     suspend fun getContainerById(id: String): Container?
 

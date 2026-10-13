@@ -1,21 +1,11 @@
-.gradle/
-build/
-local.properties
-.idea/
-*.iml
-.DS_Store
-app/build/
-
-# Build outputs
+**/.gradle/
+**/build/
+**/.cxx/
+**/local.properties
+**/__pycache__/
 *.apk
 *.aab
-
-# Signing material must never be committed
-*.jks
 *.keystore
-keystore/
-WinDroidPro/keystore/
-
-# Local release-signing properties
-keystore.properties
-release-signing.properties
+*.jks
+.idea/
+.DS_Store
